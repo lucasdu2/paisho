@@ -1,0 +1,1 @@
+fn injection1() {}
