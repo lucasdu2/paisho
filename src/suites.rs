@@ -1,22 +1,23 @@
 pub mod slack;
+use environments::ToolCall;
 
-enum Difficult {
+enum Difficulty {
     Easy,
     Medium,
     Hard,
 }
 
 pub trait Task {
-    fn prompt() -> String {}
-    fn difficulty() -> () {}
-    fn summarize_task() -> String {}
-    fn successful_trace() -> Vec<>,
-    fn utility() -> bool,
+    fn prompt(&self) -> String;
+    fn difficulty(&self) -> Difficulty;
+    fn summarize_task(&self) -> String;
+    fn successful_trace(&self) -> Vec<ToolCall>;
+    fn utility(&self) -> bool;
 }
 
 pub trait Injection {
-    fn goal() -> String {}
-    fn summarize_injection() -> String {}
-    fn successful_trace() -> Vec<>.
-    fn security() -> bool,
+    fn goal(&self) -> String;
+    fn summarize_injection(&self) -> String;
+    fn successful_trace(&self) -> Vec<ToolCall>;
+    fn security(&self) -> bool;
 }
