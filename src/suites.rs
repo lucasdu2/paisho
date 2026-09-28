@@ -1,5 +1,11 @@
 pub mod slack;
 
+enum Difficult {
+    Easy,
+    Medium,
+    Hard,
+}
+
 pub trait Task {
     fn prompt() -> String {}
     fn difficulty() -> () {}
