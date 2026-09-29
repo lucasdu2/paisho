@@ -25,6 +25,7 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
     let mut arg_structs = Vec::new();
     let mut arms = Vec::new();
     let mut schemas = Vec::new();
+    let mut names = Vec::new();
 
     for item in &mut input.items {
         let ImplItem::Fn(method) = item else { continue };
@@ -133,6 +134,7 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
                 "input_schema": input_schema,
             })
         }});
+        names.push(name_str.clone());
     }
 
     Ok(quote! {
@@ -142,6 +144,14 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
             /// JSON descriptions of every tool, in the format LLM tool-use APIs expect.
             pub fn tool_schemas() -> ::std::vec::Vec<::serde_json::Value> {
                 vec![#(#schemas),*]
+            }
+
+            /// JSON description of one tool, or `None` if no tool has that name.
+            pub fn tool_schema(name: &str) -> Option<::serde_json::Value> {
+                match name {
+                    #(#names => Some(#schemas),)*
+                    _ => None,
+                }
             }
 
             pub fn dispatch(
