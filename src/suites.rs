@@ -10,18 +10,19 @@ pub trait Task {
     fn prompt(&self) -> String;
     fn difficulty(&self) -> Difficulty;
     fn summarize_task(&self) -> String;
-    fn successful_trace(&self) -> Vec<ToolCall>;
+    fn completed_trace(&self) -> Vec<ToolCall>;
     fn utility(&self) -> bool;
 }
 
 pub trait Injection {
     fn goal(&self) -> String;
     fn summarize_injection(&self) -> String;
-    fn successful_trace(&self) -> Vec<ToolCall>;
+    fn injected_trace(&self) -> Vec<ToolCall>;
     fn security(&self) -> bool;
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ToolCall {
-    name: String,
-    parameters: Vec<String>,
+    pub name: String,
+    pub arguments: serde_json::Value,
 }

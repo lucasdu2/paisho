@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
+use paisho_macros::tools;
+
+#[derive(Debug)]
 struct Message {
     sender: String,
     recipient: String,
     body: String,
 }
 
-struct Slack {
+pub struct Slack {
     users: Vec<String>,
     channels: Vec<String>,
     user_channels: HashMap<String, Vec<String>>,
@@ -14,10 +17,11 @@ struct Slack {
     channel_inbox: HashMap<String, Vec<Message>>,
 }
 
+#[tools]
 impl Slack {
     /// Get the list of channels in the slack.
-    fn get_channels(&self) -> Vec<String> {
-        self.channels.clone()
+    fn get_channels(&self) -> Result<Vec<String>, String> {
+        Ok(self.channels.clone())
     }
 
     /// Add a user to a given channel.
