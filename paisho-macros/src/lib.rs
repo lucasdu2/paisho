@@ -32,15 +32,24 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
         let name_str = name.to_string();
 
         if method.sig.receiver().is_none() {
-            return Err(Error::new(method.sig.span(), "tools must take &self or &mut self"));
+            return Err(Error::new(
+                method.sig.span(),
+                "tools must take &self or &mut self",
+            ));
         }
         let ReturnType::Type(_, ret) = &method.sig.output else {
-            return Err(Error::new(method.sig.span(), "tools must return Result<T, String>"));
+            return Err(Error::new(
+                method.sig.span(),
+                "tools must return Result<T, String>",
+            ));
         };
         let returns_result = matches!(&**ret, Type::Path(p)
             if p.path.segments.last().is_some_and(|s| s.ident == "Result"));
         if !returns_result {
-            return Err(Error::new(ret.span(), "tools must return Result<T, String>"));
+            return Err(Error::new(
+                ret.span(),
+                "tools must return Result<T, String>",
+            ));
         }
 
         let description = doc_string(&method.attrs);
@@ -49,9 +58,14 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
         let mut fields = Vec::new();
         let mut call_args = Vec::new();
         for arg in method.sig.inputs.iter_mut().skip(1) {
-            let FnArg::Typed(pat_ty) = arg else { unreachable!() };
+            let FnArg::Typed(pat_ty) = arg else {
+                unreachable!()
+            };
             let Pat::Ident(pat_ident) = &*pat_ty.pat else {
-                return Err(Error::new(pat_ty.pat.span(), "tool arguments must be plain identifiers"));
+                return Err(Error::new(
+                    pat_ty.pat.span(),
+                    "tool arguments must be plain identifiers",
+                ));
             };
             let field = format_ident!("{}", pat_ident.ident.to_string().trim_start_matches('_'));
 
@@ -76,7 +90,11 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
                 quote! { #ty }
             };
             fields.push(quote! { #(#field_docs)* #field: #field_ty });
-            call_args.push(if is_str_ref { quote! { &args.#field } } else { quote! { args.#field } });
+            call_args.push(if is_str_ref {
+                quote! { &args.#field }
+            } else {
+                quote! { args.#field }
+            });
         }
 
         let args_ty = format_ident!("__{}_{}_args", self_name, name);
@@ -88,9 +106,19 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
         });
         arms.push(quote! {
             #name_str => {
-                let args: #args_ty = ::serde_json::from_value(call.arguments.clone())
-                    .map_err(|e| format!("{}: {}", #name_str, e))?;
-                self.#name(#(#call_args),*).map(|out| format!("{out:?}"))
+                let args: #args_ty = match ::serde_json::from_value(call.arguments.clone()) {
+                    Ok(args) => args,
+                    Err(e) => return Ok(crate::suites::ToolResult::error(format!("{}: {}", #name_str, e))),
+                };
+                Ok(match self.#name(#(#call_args),*) {
+                    Ok(out) => match ::serde_json::to_value(out) {
+                        Ok(value) => crate::suites::ToolResult::success(value),
+                        Err(e) => crate::suites::ToolResult::error(
+                            format!("{}: could not serialize result: {}", #name_str, e)
+                        ),
+                    },
+                    Err(e) => crate::suites::ToolResult::error(e),
+                })
             }
         });
         schemas.push(quote! {{
@@ -109,19 +137,20 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
 
     Ok(quote! {
         #input
-
         #(#arg_structs)*
-
         impl #self_ty {
             /// JSON descriptions of every tool, in the format LLM tool-use APIs expect.
             pub fn tool_schemas() -> ::std::vec::Vec<::serde_json::Value> {
                 vec![#(#schemas),*]
             }
 
-            pub fn dispatch(&mut self, call: &crate::suites::ToolCall) -> Result<String, String> {
+            pub fn dispatch(
+                &mut self,
+                call: &crate::suites::ToolCall,
+            ) -> Result<crate::suites::ToolResult, crate::suites::ToolError> {
                 match call.name.as_str() {
                     #(#arms)*
-                    other => Err(format!("Unknown tool {other}")),
+                    other => Err(crate::suites::ToolError::UnknownTool(other.to_string())),
                 }
             }
         }

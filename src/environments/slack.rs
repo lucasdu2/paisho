@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct Message {
     sender: String,
     recipient: String,
