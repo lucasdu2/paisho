@@ -1,5 +1,5 @@
 mod attacks;
-mod models;
+mod environments;
 mod suites;
 
 fn main() {

@@ -1,7 +1,6 @@
 pub mod slack;
-use environments::ToolCall;
 
-enum Difficulty {
+pub enum Difficulty {
     Easy,
     Medium,
     Hard,
@@ -20,4 +19,9 @@ pub trait Injection {
     fn summarize_injection(&self) -> String;
     fn successful_trace(&self) -> Vec<ToolCall>;
     fn security(&self) -> bool;
+}
+
+pub struct ToolCall {
+    name: String,
+    parameters: Vec<String>,
 }
