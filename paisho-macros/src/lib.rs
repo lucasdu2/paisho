@@ -141,6 +141,9 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
         #input
         #(#arg_structs)*
         impl #self_ty {
+            /// Names of every tool, known at compile time.
+            pub const TOOL_NAMES: &'static [&'static str] = &[#(#names),*];
+
             /// JSON descriptions of every tool, in the format LLM tool-use APIs expect.
             pub fn tool_schemas() -> ::std::vec::Vec<::serde_json::Value> {
                 vec![#(#schemas),*]
@@ -162,6 +165,23 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
                     #(#arms)*
                     other => Err(crate::suites::ToolError::UnknownTool(other.to_string())),
                 }
+            }
+        }
+
+        impl crate::environments::Environment for #self_ty {
+            fn tool_schemas(&self) -> ::std::vec::Vec<::serde_json::Value> {
+                Self::tool_schemas()
+            }
+
+            fn tool_schema(&self, name: &str) -> Option<::serde_json::Value> {
+                Self::tool_schema(name)
+            }
+
+            fn dispatch(
+                &mut self,
+                call: &crate::suites::ToolCall,
+            ) -> Result<crate::suites::ToolResult, crate::suites::ToolError> {
+                Self::dispatch(self, call)
             }
         }
     })

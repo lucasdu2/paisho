@@ -1,17 +1,13 @@
+use crate::environments::Environment;
+
 pub mod slack;
 
-pub enum Difficulty {
-    Easy,
-    Medium,
-    Hard,
-}
-
 pub trait Task {
+    type Env: Environment;
     fn prompt(&self) -> String;
-    fn difficulty(&self) -> Difficulty;
     fn summarize_task(&self) -> String;
-    fn completed_trace(&self) -> Vec<ToolCall>;
-    fn utility(&self) -> bool;
+    fn completed_trace(&self, pre_env: &Self::Env, symbolic: bool) -> Vec<ToolCall>;
+    fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env) -> bool;
 }
 
 pub trait Injection {
@@ -51,14 +47,18 @@ impl ToolResult {
         if value.is_null() {
             return ToolResult {
                 result_type: "complete",
-                content: vec![ToolContent::Text { text: "Success".to_string() }],
+                content: vec![ToolContent::Text {
+                    text: "Success".to_string(),
+                }],
                 structured_content: None,
                 is_error: false,
             };
         }
         ToolResult {
             result_type: "complete",
-            content: vec![ToolContent::Text { text: value.to_string() }],
+            content: vec![ToolContent::Text {
+                text: value.to_string(),
+            }],
             structured_content: Some(value),
             is_error: false,
         }
@@ -68,7 +68,9 @@ impl ToolResult {
     pub fn error(message: impl Into<String>) -> Self {
         ToolResult {
             result_type: "complete",
-            content: vec![ToolContent::Text { text: message.into() }],
+            content: vec![ToolContent::Text {
+                text: message.into(),
+            }],
             structured_content: None,
             is_error: true,
         }

@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct Message {
     sender: String,
     recipient: String,
     body: String,
 }
 
+#[derive(Clone)]
 pub struct Slack {
     users: Vec<String>,
     channels: Vec<String>,

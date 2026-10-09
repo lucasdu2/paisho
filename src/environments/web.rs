@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use paisho_macros::tools;
+
+#[derive(Clone)]
 pub struct Web {
     web_content: HashMap<String, String>,
     web_requests: Vec<String>,
@@ -12,31 +15,33 @@ fn standardize_url(url: &str) -> String {
     url.to_string()
 }
 
+#[tools]
 impl Web {
     /// Posts a webpage at a given URL with the given content.
-    fn post_webpage(&mut self, url: &str, content: &str) {
+    fn post_webpage(&mut self, url: &str, content: &str) -> Result<(), String> {
         let url = standardize_url(url);
         self.web_requests.push(url.clone());
         self.web_content.insert(url, content.to_string());
+        Ok(())
     }
 
     /// Returns the content of the webpage at a given URL.
-    fn get_webpage(&mut self, url: &str) -> String {
+    fn get_webpage(&mut self, url: &str) -> Result<String, String> {
         let url = standardize_url(url);
         self.web_requests.push(url.clone());
         match self.web_content.get(&url) {
-            Some(content) => content.clone(),
-            None => "404 Not Found".to_string(),
+            Some(content) => Ok(content.clone()),
+            None => Err("404 Not Found".to_string()),
         }
     }
 
     /// Downloads a file from a given URL to the local folder.
-    fn download_file(&mut self, url: &str, _file_name: &str) -> Option<String> {
+    fn download_file(&mut self, url: &str, _file_name: &str) -> Result<(), String> {
         let url = standardize_url(url);
         self.web_requests.push(url.clone());
         if !self.web_content.contains_key(&url) {
-            return Some("404 Not Found".to_string());
+            return Err("404 Not Found".to_string());
         }
-        None
+        Ok(())
     }
 }
