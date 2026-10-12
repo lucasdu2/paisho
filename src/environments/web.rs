@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Web {
-    web_content: HashMap<String, String>,
-    web_requests: Vec<String>,
+    pub(crate) web_content: HashMap<String, String>,
+    pub(crate) web_requests: Vec<String>,
 }
 
 /// Strip a leading `https://` and then a leading `http://` from the URL.

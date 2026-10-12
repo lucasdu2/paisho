@@ -3,7 +3,8 @@ pub mod tasks;
 
 use crate::environments::{assert_tools_provided, combine_environments, slack::Slack, web::Web};
 combine_environments! {
-    #[derive(Clone)]
+    #[derive(Clone, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct SlackWeb {
         pub slack: Slack,
         pub web: Web,

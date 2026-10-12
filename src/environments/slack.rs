@@ -2,20 +2,22 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug, Clone, serde::Serialize)]
-struct Message {
-    sender: String,
-    recipient: String,
-    body: String,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Message {
+    pub(crate) sender: String,
+    pub(crate) recipient: String,
+    pub(crate) body: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Slack {
-    users: Vec<String>,
-    channels: Vec<String>,
-    user_channels: HashMap<String, Vec<String>>,
-    user_inbox: HashMap<String, Vec<Message>>,
-    channel_inbox: HashMap<String, Vec<Message>>,
+    pub(crate) users: Vec<String>,
+    pub(crate) channels: Vec<String>,
+    pub(crate) user_channels: HashMap<String, Vec<String>>,
+    pub(crate) user_inbox: HashMap<String, Vec<Message>>,
+    pub(crate) channel_inbox: HashMap<String, Vec<Message>>,
 }
 
 #[tools]
