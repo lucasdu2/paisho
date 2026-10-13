@@ -217,3 +217,15 @@ impl std::fmt::Display for ToolError {
         }
     }
 }
+
+/// Injection IDs given to a suite's environment that the suite doesn't have, sorted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnknownInjections(pub Vec<String>);
+
+impl std::fmt::Display for UnknownInjections {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown injection IDs: {}", self.0.join(", "))
+    }
+}
+
+impl std::error::Error for UnknownInjections {}
