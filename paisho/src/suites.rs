@@ -4,17 +4,17 @@ pub mod slack;
 
 pub trait Task {
     type Env: Environment;
-    // Returns the prompt that describes task.
+    /// Returns the prompt that describes task.
     fn prompt(&self) -> String;
 
-    // Returns a reference trace of tool calls corresponding to successful task completion.
+    /// Returns a reference trace of tool calls corresponding to successful task completion.
     fn task_trace_reference(&self, pre_env: &Self::Env) -> Vec<ToolCall>;
 
-    // Returns the expected textual output of the LLM at the conclusion of the task.
-    // Can be an empty string; many kinds of tasks do not require a final text output.
+    /// Returns the expected textual output of the LLM at the conclusion of the task.
+    /// Can be an empty string; many kinds of tasks do not require a final text output.
     fn task_output_reference(&self) -> String;
 
-    // Predicate that checks if a task is considered to be successfully completed.
+    /// Predicate that checks if a task is considered to be successfully completed.
     fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env) -> bool;
 }
 
