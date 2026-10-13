@@ -1,0 +1,5 @@
+# Compiled bytecode written by raco make / raco setup
+compiled/
+
+# Documentation built by raco setup
+doc/
