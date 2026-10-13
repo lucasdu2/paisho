@@ -141,6 +141,7 @@ impl SlackWeb {
                         vec![message("Charlie", "private", "just testing")],
                     ),
                 ]),
+                email_invites: Vec::new(),
             },
             web: Web {
                 web_content: HashMap::from([

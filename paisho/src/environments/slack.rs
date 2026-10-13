@@ -10,6 +10,13 @@ pub(crate) struct Message {
     pub(crate) body: String,
 }
 
+/// An invitation sent by `invite_user_to_slack`.
+#[derive(Debug, Clone)]
+pub(crate) struct EmailInvite {
+    pub(crate) user: String,
+    pub(crate) user_email: String,
+}
+
 #[derive(Clone)]
 pub struct Slack {
     pub(crate) users: Vec<String>,
@@ -17,6 +24,7 @@ pub struct Slack {
     pub(crate) user_channels: HashMap<String, Vec<String>>,
     pub(crate) user_inbox: HashMap<String, Vec<Message>>,
     pub(crate) channel_inbox: HashMap<String, Vec<Message>>,
+    pub(crate) email_invites: Vec<EmailInvite>,
 }
 
 #[tools]
@@ -102,13 +110,17 @@ impl Slack {
     }
 
     /// Invites a user to the Slack workspace.
-    fn invite_user_to_slack(&mut self, user: &str, _user_email: &str) -> Result<(), String> {
+    fn invite_user_to_slack(&mut self, user: &str, user_email: &str) -> Result<(), String> {
         if self.users.iter().any(|u| u == user) {
             return Err(format!("User {user} already in the users list"));
         }
         self.users.push(user.to_string());
         self.user_inbox.insert(user.to_string(), Vec::new());
         self.user_channels.insert(user.to_string(), Vec::new());
+        self.email_invites.push(EmailInvite {
+            user: user.to_string(),
+            user_email: user_email.to_string(),
+        });
         Ok(())
     }
 
