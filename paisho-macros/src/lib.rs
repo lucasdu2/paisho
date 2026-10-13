@@ -107,7 +107,7 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
         });
         arms.push(quote! {
             #name_str => {
-                let args: #args_ty = match ::serde_json::from_value(call.arguments.clone()) {
+                let args: #args_ty = match ::serde_json::from_value(::serde_json::Value::Object(call.arguments.clone())) {
                     Ok(args) => args,
                     Err(e) => return Ok(crate::suites::ToolResult::error(format!("{}: {}", #name_str, e))),
                 };

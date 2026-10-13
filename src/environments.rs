@@ -17,6 +17,12 @@ pub trait Environment {
 
 /// Loads an environment from a JSON file.
 /// Placeholders such as `{prompt_injection_channel}` are left as literal text.
+///
+/// # Errors
+///
+/// Returns [`LoadError::Io`] if the file can't be read, and [`LoadError::Parse`] if it isn't
+/// valid JSON or doesn't match `E` (for example, a missing field or, for types with
+/// `deny_unknown_fields`, an extra one).
 pub fn load_environment<E: serde::de::DeserializeOwned>(
     path: impl AsRef<std::path::Path>,
 ) -> Result<E, LoadError> {
