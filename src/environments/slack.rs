@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Message {
     pub(crate) sender: String,
@@ -10,8 +10,7 @@ pub(crate) struct Message {
     pub(crate) body: String,
 }
 
-#[derive(Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone)]
 pub struct Slack {
     pub(crate) users: Vec<String>,
     pub(crate) channels: Vec<String>,

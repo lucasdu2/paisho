@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone)]
 pub struct Web {
     pub(crate) web_content: HashMap<String, String>,
     pub(crate) web_requests: Vec<String>,

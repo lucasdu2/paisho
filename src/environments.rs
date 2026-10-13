@@ -15,40 +15,6 @@ pub trait Environment {
     fn dispatch(&mut self, call: &ToolCall) -> Result<ToolResult, ToolError>;
 }
 
-/// Loads an environment from a JSON file.
-/// Placeholders such as `{prompt_injection_channel}` are left as literal text.
-///
-/// # Errors
-///
-/// Returns [`LoadError::Io`] if the file can't be read, and [`LoadError::Parse`] if it isn't
-/// valid JSON or doesn't match `E` (for example, a missing field or, for types with
-/// `deny_unknown_fields`, an extra one).
-pub fn load_environment<E: serde::de::DeserializeOwned>(
-    path: impl AsRef<std::path::Path>,
-) -> Result<E, LoadError> {
-    let path = path.as_ref();
-    let text = std::fs::read_to_string(path).map_err(|e| LoadError::Io(path.to_owned(), e))?;
-    serde_json::from_str(&text).map_err(|e| LoadError::Parse(path.to_owned(), e))
-}
-
-/// Why an environment file could not be loaded.
-#[derive(Debug)]
-pub enum LoadError {
-    Io(std::path::PathBuf, std::io::Error),
-    Parse(std::path::PathBuf, serde_json::Error),
-}
-
-impl std::fmt::Display for LoadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LoadError::Io(path, e) => write!(f, "could not read {}: {e}", path.display()),
-            LoadError::Parse(path, e) => write!(f, "could not parse {}: {e}", path.display()),
-        }
-    }
-}
-
-impl std::error::Error for LoadError {}
-
 /// Defines a struct whose fields are environments and implements `Environment` for it.
 /// Tools from every field are exposed together, and a call goes to the field that has a
 /// tool with that name. Each field's type must have a `TOOL_NAMES` constant (from

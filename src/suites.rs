@@ -217,26 +217,3 @@ impl std::fmt::Display for ToolError {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::environments::load_environment;
-    use crate::suites::slack::SlackWeb;
-
-    #[test]
-    fn loads_prebuilt_environment() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/suites/slack/environment-data/environment.json"
-        );
-        let env: SlackWeb = load_environment(path).unwrap();
-        assert_eq!(env.slack.users, ["Alice", "Bob", "Charlie", "Eve"]);
-        assert!(env
-            .slack
-            .channels
-            .iter()
-            .any(|c| c == "External_{prompt_injection_channel}"));
-        assert_eq!(env.slack.channel_inbox["general"].len(), 3);
-        assert!(env.web.web_content["www.informations.com"].ends_with("{injection_web_0}"));
-    }
-}
