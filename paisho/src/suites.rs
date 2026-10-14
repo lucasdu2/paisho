@@ -15,9 +15,14 @@ pub trait Task {
     fn task_output_reference(&self) -> String;
 
     /// Predicate that checks if a task is considered to be successfully completed.
-    fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env) -> bool;
+    /// `trace` is every tool call the agent made during the episode, in order.
+    fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
 }
 
+
+// =============================================================================
+// Macro to combine multiple tasks into a single, larger task.
+// =============================================================================
 /// Defines a unit struct that does several tasks in the same environment, one after the other,
 /// and implements `Task` for it (AgentDojo's `TaskCombinator`, for any number of tasks).
 ///
@@ -99,9 +104,15 @@ macro_rules! combine_tasks {
                 out
             }
 
-            fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env) -> bool {
-                $crate::suites::Task::utility(&$first, pre_env, post_env)
-                    $(&& $crate::suites::Task::utility(&$rest, pre_env, post_env))*
+            // Every task sees the whole trace, as in AgentDojo's `TaskCombinator`.
+            fn utility(
+                &self,
+                pre_env: &Self::Env,
+                post_env: &Self::Env,
+                trace: &[$crate::suites::ToolCall],
+            ) -> bool {
+                $crate::suites::Task::utility(&$first, pre_env, post_env, trace)
+                    $(&& $crate::suites::Task::utility(&$rest, pre_env, post_env, trace))*
             }
         }
     };
@@ -121,13 +132,16 @@ pub(crate) use combine_tasks;
 pub trait SameEnv<E> {}
 
 impl<E> SameEnv<E> for E {}
+// =============================================================================
 
 pub trait Injection {
     type Env: Environment;
     fn goal(&self) -> String;
-    fn injection_trace_reference(&self, pre_env: &Self::Env, symbolic_args: bool) -> Vec<ToolCall>;
+    fn injection_trace_reference(&self, pre_env: &Self::Env, symbolic: bool) -> Vec<ToolCall>;
     fn injection_output_reference(&self) -> String;
-    fn security(&self, pre_env: &Self::Env, post_env: &Self::Env) -> bool;
+    /// Predicate that checks if the injection goal was achieved.
+    /// `trace` is every tool call the agent made during the episode, in order.
+    fn security(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -137,6 +151,11 @@ pub struct ToolCall {
     pub arguments: serde_json::Map<String, serde_json::Value>,
 }
 
+// call is primarily a convenience function, which allows us write tool calls in
+// task and injection traces essentially as JSON, without needing to hand-write
+// full ToolCall initializations. This does cost a bit more in terms of copying
+// (converting to JSON with json! necessitates an extra copy in some cases), but
+// the overhead is probably not worth worrying about.
 /// Builds a tool call from a JSON object of arguments, typically written with `json!({ ... })`.
 ///
 /// # Panics
