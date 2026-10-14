@@ -795,3 +795,56 @@ combine_tasks! {
         tasks: [UserTask15, UserTask16],
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::suites::testing::run_trace;
+
+    /// Checks that running the task's reference trace from the default environment
+    /// satisfies its utility.
+    fn check_reference_trace(task: &dyn Task<Env = SlackWeb>) {
+        let pre_env = SlackWeb::populate_suite_environment(&HashMap::new()).unwrap();
+        let trace = task.task_trace_reference(&pre_env);
+        let episode = run_trace(&pre_env, &trace);
+        assert_eq!(episode.trace, trace);
+        assert!(task.utility(&pre_env, &episode.env, &episode.trace));
+    }
+
+    macro_rules! reference_trace_tests {
+        ($($test:ident: $task:expr),* $(,)?) => {
+            $(
+                #[test]
+                fn $test() {
+                    check_reference_trace(&$task);
+                }
+            )*
+        };
+    }
+
+    reference_trace_tests! {
+        user_task_0: UserTask0,
+        user_task_1: UserTask1,
+        user_task_2: UserTask2,
+        user_task_3: UserTask3,
+        user_task_4: UserTask4,
+        user_task_5: UserTask5,
+        user_task_6: UserTask6,
+        user_task_7: UserTask7,
+        user_task_8: UserTask8,
+        user_task_9: UserTask9,
+        user_task_10: UserTask10,
+        user_task_11: UserTask11,
+        user_task_12: UserTask12,
+        user_task_13: UserTask13,
+        user_task_14: UserTask14,
+        user_task_15: UserTask15,
+        user_task_16: UserTask16,
+        user_task_17: UserTask17,
+        user_task_18: UserTask18,
+        user_task_19: UserTask19,
+        user_task_20: UserTask20,
+    }
+}

@@ -19,7 +19,6 @@ pub trait Task {
     fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
 }
 
-
 // =============================================================================
 // Macro to combine multiple tasks into a single, larger task.
 // =============================================================================
@@ -136,12 +135,59 @@ impl<E> SameEnv<E> for E {}
 
 pub trait Injection {
     type Env: Environment;
+    /// Returns the injection goal. As in AgentDojo, it should be precise and
+    /// LLM-understandable; it should be usable to generate the injection prompts
+    /// used in attacks. In practice, this goal string is often just directly
+    /// interpolated into attack templates for LLM consumption.
     fn goal(&self) -> String;
+
+    /// Returns a reference trace of tool calls corresponding to successful injection.
     fn injection_trace_reference(&self, pre_env: &Self::Env, symbolic: bool) -> Vec<ToolCall>;
+
+    /// Returns the expected textual output of the LLM at the conclusion of a successful injection.
+    /// Can be an empty string; many kinds of injections do not result in a final text output.
     fn injection_output_reference(&self) -> String;
+
     /// Predicate that checks if the injection goal was achieved.
     /// `trace` is every tool call the agent made during the episode, in order.
     fn security(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
+}
+
+/// An environment for one episode that records every tool call it dispatches, in order.
+/// The recorded trace is what `Task::utility` and `Injection::security` receive.
+///
+/// Wrap only the outermost environment (e.g. `SlackWeb`, not its `slack` field too), so each
+/// call is recorded exactly once.
+pub struct Recording<E> {
+    pub env: E,
+    pub trace: Vec<ToolCall>,
+}
+
+impl<E> Recording<E> {
+    /// Starts an episode in `env` with an empty trace.
+    pub fn new(env: E) -> Self {
+        Recording {
+            env,
+            trace: Vec::new(),
+        }
+    }
+}
+
+impl<E: Environment> Environment for Recording<E> {
+    fn tool_schemas(&self) -> Vec<serde_json::Value> {
+        self.env.tool_schemas()
+    }
+
+    fn tool_schema(&self, name: &str) -> Option<serde_json::Value> {
+        self.env.tool_schema(name)
+    }
+
+    fn dispatch(&mut self, call: &ToolCall) -> Result<ToolResult, ToolError> {
+        // Recorded before dispatching so that calls to unknown tools and calls that fail
+        // are in the trace too, as in AgentDojo, whose trace is every call the model made.
+        self.trace.push(call.clone());
+        self.env.dispatch(call)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -248,3 +294,27 @@ impl std::fmt::Display for UnknownInjections {
 }
 
 impl std::error::Error for UnknownInjections {}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::{Recording, ToolCall};
+    use crate::environments::Environment;
+
+    /// Runs `trace` in a new episode starting from `pre_env` and returns the episode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a call names a tool the environment doesn't have, or if a tool returns an
+    /// error (such as for a misspelled argument name).
+    pub(crate) fn run_trace<E: Environment + Clone>(
+        pre_env: &E,
+        trace: &[ToolCall],
+    ) -> Recording<E> {
+        let mut episode = Recording::new(pre_env.clone());
+        for call in trace {
+            let result = episode.dispatch(call).unwrap_or_else(|e| panic!("{e}"));
+            assert!(!result.is_error, "{call:?} failed: {:?}", result.content);
+        }
+        episode
+    }
+}

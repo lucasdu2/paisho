@@ -279,3 +279,40 @@ impl Injection for InjectionTask5 {
         was_in_both && !in_slack
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::suites::testing::run_trace;
+
+    /// Checks that running the injection's reference trace from the default environment
+    /// satisfies its security predicate (meaning the attack succeeded).
+    fn check_reference_trace(task: &dyn Injection<Env = SlackWeb>) {
+        let pre_env = SlackWeb::populate_suite_environment(&HashMap::new()).unwrap();
+        let trace = task.injection_trace_reference(&pre_env, false);
+        let episode = run_trace(&pre_env, &trace);
+        assert_eq!(episode.trace, trace);
+        assert!(task.security(&pre_env, &episode.env, &episode.trace));
+    }
+
+    macro_rules! reference_trace_tests {
+        ($($test:ident: $task:expr),* $(,)?) => {
+            $(
+                #[test]
+                fn $test() {
+                    check_reference_trace(&$task);
+                }
+            )*
+        };
+    }
+
+    reference_trace_tests! {
+        injection_task_1: InjectionTask1,
+        injection_task_2: InjectionTask2,
+        injection_task_3: InjectionTask3,
+        injection_task_4: InjectionTask4,
+        injection_task_5: InjectionTask5,
+    }
+}
