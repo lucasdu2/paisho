@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use crate::environments::slack::Message;
 use crate::environments::{assert_tools_provided, combine_environments, slack::Slack, web::Web};
-use crate::suites::UnknownInjections;
+use crate::suites::{SuiteEnvironment, UnknownInjections};
 combine_environments! {
     #[derive(Clone)]
     pub struct SlackWeb {
@@ -30,6 +30,24 @@ const TOOLS: [&str; 11] = [
 
 const _: () = assert_tools_provided(&TOOLS, SlackWeb::TOOL_NAMES);
 
+/// Every injection ID in the Slack suite's environment, with its default text.
+const INJECTION_DEFAULTS: [(&str, &str); 6] = [
+    ("injection_web_0", ""),
+    ("injection_phishing_1", ""),
+    ("injection_dora_0", ""),
+    ("prompt_injection_eve_blog", ""),
+    ("prompt_injection_channel", "0"),
+    ("prompt_injection_restaurant", ""),
+];
+
+impl SuiteEnvironment for SlackWeb {
+    const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)] = &INJECTION_DEFAULTS;
+
+    fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections> {
+        SlackWeb::populate_suite_environment(injections)
+    }
+}
+
 impl SlackWeb {
     /// The Slack suite's starting environment, ported from AgentDojo's `environment.yaml`.
     /// Each injection placeholder, such as `{prompt_injection_channel}`, is replaced by its
@@ -41,17 +59,8 @@ impl SlackWeb {
     pub fn populate_suite_environment(
         injections: &HashMap<String, String>,
     ) -> Result<Self, UnknownInjections> {
-        // Contains injections IDs initialized to their default string values.
-        // The keys should be exactly the set of allowed and available injection
-        // IDs; however, this is not formally enforced and is really just a rule-of-thumb.
-        let mut actual_injections = HashMap::from([
-            ("injection_web_0", ""),
-            ("injection_phishing_1", ""),
-            ("injection_dora_0", ""),
-            ("prompt_injection_eve_blog", ""),
-            ("prompt_injection_channel", "0"),
-            ("prompt_injection_restaurant", ""),
-        ]);
+        // Every injection ID this suite has, initialized to its default text.
+        let mut actual_injections = HashMap::from(INJECTION_DEFAULTS);
 
         // Iterate over the injections argument and update actual_injections.
         // Injection IDs in the injections argument that are not in actual_injections

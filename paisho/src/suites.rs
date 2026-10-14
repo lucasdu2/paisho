@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::environments::Environment;
 
 pub mod slack;
@@ -151,6 +153,20 @@ pub trait Injection {
     /// Predicate that checks if the injection goal was achieved.
     /// `trace` is every tool call the agent made during the episode, in order.
     fn security(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
+}
+
+/// The starting environment of a suite, into which an attack can place injections.
+pub trait SuiteEnvironment: Environment + Clone {
+    /// Every injection ID in the environment, with the text it holds when not attacked.
+    const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)];
+
+    /// The suite's starting environment, with each injection ID in `injections` holding its
+    /// given text and every other ID holding its default.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UnknownInjections`] listing every ID in `injections` the suite doesn't have.
+    fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections>;
 }
 
 /// An environment for one episode that records every tool call it dispatches, in order.
