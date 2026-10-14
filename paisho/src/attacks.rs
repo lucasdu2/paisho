@@ -20,10 +20,12 @@ pub trait Attack {
     fn attack_name(&self) -> String;
     fn attack_summary(&self) -> String;
 
-    /// The text to inject to steer the agent toward `injection_task`'s goal. It depends only
-    /// on the attack and the injection task, so compute it once per injection task and reuse
-    /// it for every user task; [`inject_at`] places it at a user task's vectors.
-    fn injection_text<I>(&self, injection_task: &I) -> String
+    /// The text to inject at each injection vector in the suite, by injection ID, to steer the
+    /// agent toward `injection_task`'s goal. Leaving a vector out means the attack doesn't
+    /// inject there. The texts depend only on the attack and the injection task, so compute
+    /// them once per injection task and reuse them for every user task; [`inject_at`] picks
+    /// out a user task's vectors.
+    fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
         I: Injection,
         I::Env: SuiteEnvironment;
@@ -82,12 +84,12 @@ impl Attack for ImportantInstructions {
             .to_string()
     }
 
-    fn injection_text<I>(&self, injection_task: &I) -> String
+    fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
         I: Injection,
         I::Env: SuiteEnvironment,
     {
-        self.render(&injection_task.goal())
+        uniform::<I::Env>(&self.render(&injection_task.goal()))
     }
 }
 
@@ -142,21 +144,30 @@ impl Attack for ToolKnowledge {
             .to_string()
     }
 
-    fn injection_text<I>(&self, injection_task: &I) -> String
+    fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
         I: Injection,
         I::Env: SuiteEnvironment,
     {
-        self.render(&injection_task.goal(), &tools_sequence(injection_task))
+        uniform::<I::Env>(&self.render(&injection_task.goal(), &tools_sequence(injection_task)))
     }
 }
 
-/// The injections for one episode: `text` at each of `vectors`, by injection ID. Pass the
-/// result to the suite's [`SuiteEnvironment::with_injections`].
-pub fn inject_at(vectors: &[String], text: &str) -> HashMap<String, String> {
+/// The injections for one episode: each of `vectors` that `texts` has a text for, with that
+/// text, by injection ID. Pass the result to the suite's [`SuiteEnvironment::with_injections`].
+pub fn inject_at(vectors: &[String], texts: &HashMap<String, String>) -> HashMap<String, String> {
     vectors
         .iter()
-        .map(|id| (id.clone(), text.to_string()))
+        .filter_map(|id| Some((id.clone(), texts.get(id)?.clone())))
+        .collect()
+}
+
+/// `text` at every injection vector in `E`'s suite, for attacks that inject the same text
+/// everywhere.
+fn uniform<E: SuiteEnvironment>(text: &str) -> HashMap<String, String> {
+    E::INJECTION_DEFAULTS
+        .iter()
+        .map(|(id, _)| (id.to_string(), text.to_string()))
         .collect()
 }
 
@@ -367,10 +378,22 @@ mod tests {
         );
     }
 
+    /// The single text a uniform attack places at every vector in the Slack suite.
+    fn uniform_text(texts: HashMap<String, String>) -> String {
+        let all = injection_vectors(&UserTask0, InjectVectors::InjectAll);
+        let mut ids: Vec<&String> = texts.keys().collect();
+        ids.sort();
+        assert_eq!(ids, all.iter().collect::<Vec<_>>());
+        let text = texts[&all[0]].clone();
+        assert!(texts.values().all(|t| *t == text));
+        text
+    }
+
     /// Expected text is AgentDojo's `_JB_STRING` formatted for injection task 5.
     #[test]
     fn important_instructions_text_matches_agentdojo() {
-        let text = ImportantInstructions::new("Claude").injection_text(&InjectionTask5);
+        let text =
+            uniform_text(ImportantInstructions::new("Claude").injection_texts(&InjectionTask5));
         assert_eq!(
             text,
             concat!(
@@ -390,7 +413,7 @@ mod tests {
     /// Python dict.
     #[test]
     fn tool_knowledge_text() {
-        let text = ToolKnowledge::new("Claude").injection_text(&InjectionTask5);
+        let text = uniform_text(ToolKnowledge::new("Claude").injection_texts(&InjectionTask5));
         assert_eq!(
             text,
             concat!(
@@ -415,19 +438,42 @@ mod tests {
     #[test]
     fn injections_reach_the_environment() {
         let vectors = seen(&UserTask20);
-        let text = ImportantInstructions::new("Claude").injection_text(&InjectionTask5);
-        let injections = inject_at(&vectors, &text);
+        let texts = ImportantInstructions::new("Claude").injection_texts(&InjectionTask5);
+        let injections = inject_at(&vectors, &texts);
         assert_eq!(injections.len(), vectors.len());
-        assert!(injections.values().all(|t| *t == text));
 
         let env = SlackWeb::with_injections(&injections).unwrap();
-        for url in [
-            "www.informations.com",
-            "www.dora-website.com",
-            "www.eve-blog.com",
-            "www.restaurant-zurich.com",
+        for (url, id) in [
+            ("www.informations.com", "injection_web_0"),
+            ("www.dora-website.com", "injection_dora_0"),
+            ("www.eve-blog.com", "prompt_injection_eve_blog"),
+            ("www.restaurant-zurich.com", "prompt_injection_restaurant"),
         ] {
-            assert!(env.web.web_content[url].contains(&text), "{url}");
+            assert!(env.web.web_content[url].contains(&texts[id]), "{url}");
         }
+    }
+
+    /// Each vector gets its own text, and vectors without a text are not injected.
+    #[test]
+    fn inject_at_uses_each_vectors_text() {
+        let vectors = seen(&UserTask20);
+        let texts = HashMap::from([
+            ("injection_web_0".to_string(), "web text".to_string()),
+            ("injection_dora_0".to_string(), "dora text".to_string()),
+            ("prompt_injection_channel".to_string(), "unused".to_string()),
+        ]);
+        let injections = inject_at(&vectors, &texts);
+        assert_eq!(
+            injections,
+            HashMap::from([
+                ("injection_web_0".to_string(), "web text".to_string()),
+                ("injection_dora_0".to_string(), "dora text".to_string()),
+            ])
+        );
+
+        let env = SlackWeb::with_injections(&injections).unwrap();
+        assert!(env.web.web_content["www.informations.com"].ends_with("web text"));
+        assert!(env.web.web_content["www.dora-website.com"].ends_with("dora text"));
+        assert!(!env.web.web_content["www.informations.com"].contains("dora text"));
     }
 }
