@@ -158,7 +158,7 @@ impl Attack for ToolKnowledge {
 pub fn inject_at(vectors: &[String], texts: &HashMap<String, String>) -> HashMap<String, String> {
     vectors
         .iter()
-        .filter_map(|id| Some((id.clone(), texts.get(id)?.clone())))
+        .filter_map(|id| texts.get(id).map(|text| (id.clone(), text.clone())))
         .collect()
 }
 
