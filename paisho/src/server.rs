@@ -392,8 +392,8 @@ fn no_episode() -> Response {
     }
 }
 
-/// Serves one client until it disconnects. Each connection has its own episode, and an
-/// episode left unfinished when the client disconnects is discarded.
+/// Serves one client until it disconnects, on the client's own thread. Each connection has
+/// its own episode, and an episode left unfinished when the client disconnects is discarded.
 fn serve_connection(conn: Stream) -> io::Result<()> {
     let mut conn = BufReader::new(conn);
     let mut episode = None;
@@ -435,11 +435,19 @@ pub fn run(name: &str) -> io::Result<()> {
         .create_sync()?;
     eprintln!("paisho listening on {name}");
 
-    // One client at a time; a second client waits until the first disconnects.
+    // Each client gets its own thread, so clients run their episodes in parallel. Nothing
+    // is shared between connections: each owns its episode, and suites and tasks are
+    // read-only constants. A panic while serving a client ends only that client's thread.
     for conn in listener.incoming() {
-        let result = conn.and_then(serve_connection);
-        if let Err(e) = result {
-            eprintln!("connection failed: {e}");
+        match conn {
+            Ok(conn) => {
+                std::thread::spawn(move || {
+                    if let Err(e) = serve_connection(conn) {
+                        eprintln!("connection failed: {e}");
+                    }
+                });
+            }
+            Err(e) => eprintln!("incoming connection failed: {e}"),
         }
     }
     Ok(())
