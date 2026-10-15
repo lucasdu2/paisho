@@ -36,6 +36,8 @@ enum Request {
         /// The suite's AgentDojo name, such as `"slack"`.
         suite: String,
     },
+    /// Lists the names of the attacks `start` accepts.
+    ListAttacks,
     /// Starts a new episode, replacing any episode in progress on this connection.
     /// With `injection` and `attack`, the environment is attacked; otherwise not.
     Start {
@@ -72,6 +74,9 @@ enum Response {
         suite: &'static str,
         tasks: Vec<TaskInfo>,
         injections: Vec<InjectionInfo>,
+    },
+    Attacks {
+        attacks: Vec<&'static str>,
     },
     /// The episode has started; `prompt` is the user task to give the agent.
     Started {
@@ -266,6 +271,10 @@ impl<S: Suite> RunningEpisode for Episode<S> {
     }
 }
 
+/// Names of the attacks `start` accepts, as handled by [`attack_texts`]. Add an attack to
+/// both.
+const ATTACKS: &[&str] = &["important_instructions", "tool_knowledge"];
+
 /// The text of `attack` for `injection` at every injection vector.
 fn attack_texts<E: SuiteEnvironment>(
     attack: &str,
@@ -294,6 +303,9 @@ fn handle(request: Request, episode: &mut Option<Box<dyn RunningEpisode>>) -> Re
         Request::ListSuiteContent { suite } => match find_suite(&suite) {
             Ok(suite) => suite.content(),
             Err(message) => Response::Error { message },
+        },
+        Request::ListAttacks => Response::Attacks {
+            attacks: ATTACKS.to_vec(),
         },
         Request::Start {
             suite,
@@ -411,6 +423,32 @@ mod tests {
     fn respond(request: Value) -> Value {
         let request: Request = serde_json::from_value(request).unwrap();
         serde_json::to_value(handle(request, &mut None)).unwrap()
+    }
+
+    #[test]
+    fn lists_attacks() {
+        assert_eq!(
+            respond(json!({ "type": "list_attacks" })),
+            json!({ "type": "attacks", "attacks": ["important_instructions", "tool_knowledge"] })
+        );
+    }
+
+    /// Every listed attack is one `start` accepts, under the name the attack gives itself.
+    #[test]
+    fn listed_attacks_are_runnable() {
+        let injection = SlackSuite::injection("injection_task_1").unwrap();
+        for attack in ATTACKS {
+            assert!(
+                attack_texts(attack, DEFAULT_MODEL_NAME, injection).is_ok(),
+                "{attack}"
+            );
+        }
+        for name in [
+            ImportantInstructions::new(DEFAULT_MODEL_NAME).attack_name(),
+            ToolKnowledge::new(DEFAULT_MODEL_NAME).attack_name(),
+        ] {
+            assert!(ATTACKS.contains(&name.as_str()), "{name} is not listed");
+        }
     }
 
     #[test]
