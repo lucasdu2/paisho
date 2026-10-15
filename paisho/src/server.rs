@@ -3,9 +3,7 @@
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
 
-use interprocess::local_socket::{
-    GenericFilePath, GenericNamespaced, ListenerOptions, Name, Stream, prelude::*,
-};
+use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Name, Stream, prelude::*};
 use serde::{Deserialize, Serialize};
 
 use crate::attacks::{
@@ -415,16 +413,17 @@ fn serve_connection(conn: Stream) -> io::Result<()> {
     }
 }
 
-/// The socket name: namespaced where supported (an abstract socket on Linux),
-/// otherwise a file in the temporary directory.
+/// The local socket for `name`. Clients connect to it at these addresses:
+///
+/// - Linux: the abstract Unix socket `name` (no file on disk; `"\0" + name` in most socket
+///   APIs).
+/// - macOS and other Unixes: the Unix socket file `/tmp/` + `name`.
+/// - Windows: the named pipe `\\.\pipe\` + `name`.
+///
+/// A Rust client using `interprocess` can connect with the same mapping:
+/// `Stream::connect(name.to_ns_name::<GenericNamespaced>()?)`.
 fn socket_name(name: &str) -> io::Result<Name<'static>> {
-    if GenericNamespaced::is_supported() {
-        name.to_string().to_ns_name::<GenericNamespaced>()
-    } else {
-        std::env::temp_dir()
-            .join(name)
-            .to_fs_name::<GenericFilePath>()
-    }
+    name.to_string().to_ns_name::<GenericNamespaced>()
 }
 
 /// Listens on the local socket `name` and serves clients until the process is stopped.
