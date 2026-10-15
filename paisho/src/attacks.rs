@@ -225,13 +225,21 @@ where
     T: Task + ?Sized,
     T::Env: SuiteEnvironment,
 {
-    let (injectable, noninjectable) = tasks
-        .into_iter()
-        .partition(|task| !injection_vectors(*task, InjectVectors::InjectSeenOnly).is_empty());
+    let (injectable, noninjectable) = tasks.into_iter().partition(|task| is_injectable(*task));
     CheckInjectable {
         injectable,
         noninjectable,
     }
+}
+
+/// Whether `task`'s reference trace shows the model at least one injection vector, i.e. it
+/// has at least one [`InjectVectors::InjectSeenOnly`] vector.
+pub fn is_injectable<T>(task: &T) -> bool
+where
+    T: Task + ?Sized,
+    T::Env: SuiteEnvironment,
+{
+    !injection_vectors(task, InjectVectors::InjectSeenOnly).is_empty()
 }
 
 /// The injection task's reference trace as instructions, with placeholder arguments

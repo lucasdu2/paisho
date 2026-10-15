@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::attacks::{
     Attack, DEFAULT_MODEL_NAME, ImportantInstructions, InjectVectors, ToolKnowledge, inject_at,
-    injection_vectors,
+    injection_vectors, is_injectable,
 };
 use crate::environments::Environment;
 use crate::suites::slack::SlackSuite;
@@ -38,6 +38,12 @@ enum Request {
     },
     /// Lists the names of the attacks `start` accepts.
     ListAttacks,
+    /// Lists which of a suite's tasks are injectable: their reference trace shows the model
+    /// at least one injection vector, so an attack placed there can reach the agent.
+    ListInjectable {
+        /// The suite's AgentDojo name, such as `"slack"`.
+        suite: String,
+    },
     /// Starts a new episode, replacing any episode in progress on this connection.
     /// With `injection` and `attack`, the environment is attacked; otherwise not.
     Start {
@@ -77,6 +83,12 @@ enum Response {
     },
     Attacks {
         attacks: Vec<&'static str>,
+    },
+    /// Task IDs, each list in the suite's order.
+    Injectability {
+        suite: &'static str,
+        injectable: Vec<&'static str>,
+        noninjectable: Vec<&'static str>,
     },
     /// The episode has started; `prompt` is the user task to give the agent.
     Started {
@@ -125,6 +137,7 @@ const SUITES: &[&dyn AnySuite] = &[&SlackSuite];
 trait AnySuite {
     fn name(&self) -> &'static str;
     fn content(&self) -> Response;
+    fn injectability(&self) -> Response;
     fn start_episode(
         &self,
         task: &str,
@@ -137,6 +150,18 @@ trait AnySuite {
 impl<S: Suite> AnySuite for S {
     fn name(&self) -> &'static str {
         S::NAME
+    }
+
+    fn injectability(&self) -> Response {
+        let (injectable, noninjectable): (Vec<_>, Vec<_>) = S::TASKS
+            .iter()
+            .copied()
+            .partition(|(_, task)| is_injectable(*task));
+        Response::Injectability {
+            suite: S::NAME,
+            injectable: injectable.into_iter().map(|(id, _)| id).collect(),
+            noninjectable: noninjectable.into_iter().map(|(id, _)| id).collect(),
+        }
     }
 
     fn content(&self) -> Response {
@@ -307,6 +332,10 @@ fn handle(request: Request, episode: &mut Option<Box<dyn RunningEpisode>>) -> Re
         Request::ListAttacks => Response::Attacks {
             attacks: ATTACKS.to_vec(),
         },
+        Request::ListInjectable { suite } => match find_suite(&suite) {
+            Ok(suite) => suite.injectability(),
+            Err(message) => Response::Error { message },
+        },
         Request::Start {
             suite,
             task,
@@ -449,6 +478,25 @@ mod tests {
         ] {
             assert!(ATTACKS.contains(&name.as_str()), "{name} is not listed");
         }
+    }
+
+    /// Every Slack task is injectable (see `every_slack_task_is_injectable` in `attacks.rs`).
+    #[test]
+    fn lists_injectable_tasks() {
+        let ids: Vec<String> = (0..=20).map(|i| format!("user_task_{i}")).collect();
+        assert_eq!(
+            respond(json!({ "type": "list_injectable", "suite": "slack" })),
+            json!({
+                "type": "injectability",
+                "suite": "slack",
+                "injectable": ids,
+                "noninjectable": [],
+            })
+        );
+        assert_eq!(
+            respond(json!({ "type": "list_injectable", "suite": "banking" })),
+            json!({ "type": "error", "message": "unknown suite: banking" })
+        );
     }
 
     #[test]
