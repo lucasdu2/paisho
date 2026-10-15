@@ -179,7 +179,7 @@ fn uniform<E: SuiteEnvironment>(text: &str) -> HashMap<String, String> {
 /// vector, run the task's reference trace, and keep the IDs whose canary is in a tool result.
 pub fn injection_vectors<T>(user_task: &T, vectors: InjectVectors) -> Vec<String>
 where
-    T: Task,
+    T: Task + ?Sized,
     T::Env: SuiteEnvironment,
 {
     let ids = T::Env::INJECTION_DEFAULTS
@@ -220,6 +220,33 @@ where
     ids
 }
 
+/// User tasks split by whether an attack can reach them, as returned by [`check_injectable`].
+/// Each list keeps the tasks' original order.
+pub struct CheckInjectable<'a, T: ?Sized> {
+    /// Tasks whose reference trace shows the model at least one injection vector.
+    pub injectable: Vec<&'a T>,
+    /// Tasks whose reference trace shows the model no injection vector, so no
+    /// [`InjectVectors::InjectSeenOnly`] attack can affect them.
+    pub noninjectable: Vec<&'a T>,
+}
+
+/// Splits `user_tasks` into those with at least one [`InjectVectors::InjectSeenOnly`]
+/// vector and those with none. To pass tasks of different types, use trait objects, e.g.
+/// `vec![&UserTask0 as &dyn Task<Env = SlackWeb>, &UserTask1]`.
+pub fn check_injectable<'a, T>(user_tasks: Vec<&'a T>) -> CheckInjectable<'a, T>
+where
+    T: Task + ?Sized,
+    T::Env: SuiteEnvironment,
+{
+    let (injectable, noninjectable) = user_tasks
+        .into_iter()
+        .partition(|task| !injection_vectors(*task, InjectVectors::InjectSeenOnly).is_empty());
+    CheckInjectable {
+        injectable,
+        noninjectable,
+    }
+}
+
 /// The injection task's reference trace as instructions, with placeholder arguments
 /// (AgentDojo's `ToolKnowledgeAttack.get_tools_sequence`). Arguments are written as JSON.
 fn tools_sequence<I>(injection_task: &I) -> String
@@ -258,6 +285,7 @@ mod tests {
     use crate::suites::slack::SlackWeb;
     use crate::suites::slack::injections::InjectionTask5;
     use crate::suites::slack::tasks::*;
+    use crate::suites::{ToolCall, call};
 
     fn seen<T: Task<Env = SlackWeb>>(task: &T) -> Vec<String> {
         injection_vectors(task, InjectVectors::InjectSeenOnly)
@@ -451,6 +479,77 @@ mod tests {
         ] {
             assert!(env.web.web_content[url].contains(&texts[id]), "{url}");
         }
+    }
+
+    /// A user task whose reference trace reads only Alice's inbox, which holds no injection.
+    struct ReadsNoVectors;
+
+    impl Task for ReadsNoVectors {
+        type Env = SlackWeb;
+
+        fn prompt(&self) -> String {
+            "Read Alice's inbox.".to_string()
+        }
+
+        fn task_trace_reference(&self, _pre_env: &SlackWeb) -> Vec<ToolCall> {
+            vec![call("read_inbox", serde_json::json!({ "user": "Alice" }))]
+        }
+
+        fn task_output_reference(&self) -> String {
+            String::new()
+        }
+
+        fn utility(&self, _pre_env: &SlackWeb, _post_env: &SlackWeb, _trace: &[ToolCall]) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn every_slack_user_task_is_injectable() {
+        let tasks: Vec<&dyn Task<Env = SlackWeb>> = vec![
+            &UserTask0,
+            &UserTask1,
+            &UserTask2,
+            &UserTask3,
+            &UserTask4,
+            &UserTask5,
+            &UserTask6,
+            &UserTask7,
+            &UserTask8,
+            &UserTask9,
+            &UserTask10,
+            &UserTask11,
+            &UserTask12,
+            &UserTask13,
+            &UserTask14,
+            &UserTask15,
+            &UserTask16,
+            &UserTask17,
+            &UserTask18,
+            &UserTask19,
+            &UserTask20,
+        ];
+        let checked = check_injectable(tasks);
+        assert_eq!(checked.injectable.len(), 21);
+        assert!(checked.noninjectable.is_empty());
+    }
+
+    #[test]
+    fn check_injectable_splits_and_keeps_order() {
+        let tasks: Vec<&dyn Task<Env = SlackWeb>> =
+            vec![&UserTask4, &ReadsNoVectors, &UserTask0, &ReadsNoVectors];
+        let checked = check_injectable(tasks);
+        let prompts = |tasks: &[&dyn Task<Env = SlackWeb>]| -> Vec<String> {
+            tasks.iter().map(|task| task.prompt()).collect()
+        };
+        assert_eq!(
+            prompts(&checked.injectable),
+            [UserTask4.prompt(), UserTask0.prompt()]
+        );
+        assert_eq!(
+            prompts(&checked.noninjectable),
+            [ReadsNoVectors.prompt(), ReadsNoVectors.prompt()]
+        );
     }
 
     /// Each vector gets its own text, and vectors without a text are not injected.
