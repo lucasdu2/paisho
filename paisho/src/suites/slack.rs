@@ -59,36 +59,36 @@ impl Suite for SlackSuite {
 
     const NAME: &'static str = "slack";
 
-    const USER_TASKS: &'static [(&'static str, &'static dyn Task<Env = SlackWeb>)] = &[
-        ("user_task_0", &UserTask0),
-        ("user_task_1", &UserTask1),
-        ("user_task_2", &UserTask2),
-        ("user_task_3", &UserTask3),
-        ("user_task_4", &UserTask4),
-        ("user_task_5", &UserTask5),
-        ("user_task_6", &UserTask6),
-        ("user_task_7", &UserTask7),
-        ("user_task_8", &UserTask8),
-        ("user_task_9", &UserTask9),
-        ("user_task_10", &UserTask10),
-        ("user_task_11", &UserTask11),
-        ("user_task_12", &UserTask12),
-        ("user_task_13", &UserTask13),
-        ("user_task_14", &UserTask14),
-        ("user_task_15", &UserTask15),
-        ("user_task_16", &UserTask16),
-        ("user_task_17", &UserTask17),
-        ("user_task_18", &UserTask18),
-        ("user_task_19", &UserTask19),
-        ("user_task_20", &UserTask20),
+    const TASKS: &'static [(&'static str, &'static dyn Task<Env = SlackWeb>)] = &[
+        ("user_task_0", &Task0),
+        ("user_task_1", &Task1),
+        ("user_task_2", &Task2),
+        ("user_task_3", &Task3),
+        ("user_task_4", &Task4),
+        ("user_task_5", &Task5),
+        ("user_task_6", &Task6),
+        ("user_task_7", &Task7),
+        ("user_task_8", &Task8),
+        ("user_task_9", &Task9),
+        ("user_task_10", &Task10),
+        ("user_task_11", &Task11),
+        ("user_task_12", &Task12),
+        ("user_task_13", &Task13),
+        ("user_task_14", &Task14),
+        ("user_task_15", &Task15),
+        ("user_task_16", &Task16),
+        ("user_task_17", &Task17),
+        ("user_task_18", &Task18),
+        ("user_task_19", &Task19),
+        ("user_task_20", &Task20),
     ];
 
-    const INJECTION_TASKS: &'static [(&'static str, &'static dyn Injection<Env = SlackWeb>)] = &[
-        ("injection_task_1", &InjectionTask1),
-        ("injection_task_2", &InjectionTask2),
-        ("injection_task_3", &InjectionTask3),
-        ("injection_task_4", &InjectionTask4),
-        ("injection_task_5", &InjectionTask5),
+    const INJECTIONS: &'static [(&'static str, &'static dyn Injection<Env = SlackWeb>)] = &[
+        ("injection_task_1", &Injection1),
+        ("injection_task_2", &Injection2),
+        ("injection_task_3", &Injection3),
+        ("injection_task_4", &Injection4),
+        ("injection_task_5", &Injection5),
     ];
 }
 
@@ -315,42 +315,40 @@ mod tests {
     /// `include_str!` makes Cargo rebuild the test when either file changes.
     #[test]
     fn slack_suite_lists_every_declared_task() {
-        let user_ids: HashSet<&str> = SlackSuite::USER_TASKS.iter().map(|(id, _)| *id).collect();
+        let user_ids: HashSet<&str> = SlackSuite::TASKS.iter().map(|(id, _)| *id).collect();
         assert_eq!(
             user_ids.len(),
-            SlackSuite::USER_TASKS.len(),
+            SlackSuite::TASKS.len(),
             "duplicate user task ID"
         );
         assert_eq!(
-            SlackSuite::USER_TASKS.len(),
-            declared_tasks(include_str!("slack/tasks.rs"), "UserTask"),
-            "SlackSuite::USER_TASKS vs. tasks.rs"
+            SlackSuite::TASKS.len(),
+            declared_tasks(include_str!("slack/tasks.rs"), "Task"),
+            "SlackSuite::TASKS vs. tasks.rs"
         );
 
-        let injection_ids: HashSet<&str> = SlackSuite::INJECTION_TASKS
-            .iter()
-            .map(|(id, _)| *id)
-            .collect();
+        let injection_ids: HashSet<&str> =
+            SlackSuite::INJECTIONS.iter().map(|(id, _)| *id).collect();
         assert_eq!(
             injection_ids.len(),
-            SlackSuite::INJECTION_TASKS.len(),
+            SlackSuite::INJECTIONS.len(),
             "duplicate injection task ID"
         );
         assert_eq!(
-            SlackSuite::INJECTION_TASKS.len(),
-            declared_tasks(include_str!("slack/injections.rs"), "InjectionTask"),
-            "SlackSuite::INJECTION_TASKS vs. injections.rs"
+            SlackSuite::INJECTIONS.len(),
+            declared_tasks(include_str!("slack/injections.rs"), "Injection"),
+            "SlackSuite::INJECTIONS vs. injections.rs"
         );
     }
 
     #[test]
     fn slack_suite_looks_up_tasks_by_id() {
         assert_eq!(SlackSuite::NAME, "slack");
-        let task = SlackSuite::user_task("user_task_4").unwrap();
-        assert_eq!(task.prompt(), UserTask4.prompt());
-        let task = SlackSuite::injection_task("injection_task_5").unwrap();
-        assert_eq!(task.goal(), InjectionTask5.goal());
-        assert!(SlackSuite::user_task("user_task_21").is_none());
-        assert!(SlackSuite::injection_task("injection_task_0").is_none());
+        let task = SlackSuite::task("user_task_4").unwrap();
+        assert_eq!(task.prompt(), Task4.prompt());
+        let task = SlackSuite::injection("injection_task_5").unwrap();
+        assert_eq!(task.goal(), Injection5.goal());
+        assert!(SlackSuite::task("user_task_21").is_none());
+        assert!(SlackSuite::injection("injection_task_0").is_none());
     }
 }
