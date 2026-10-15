@@ -12,7 +12,7 @@ paisho *only* implements AgentDojo's built-in set of mock environments and evalu
 
 ### Other differences from AgentDojo
 paisho aims to differ from AgentDojo in a few other ways:
-- Remove the DIFFICULTY annotation on tasks. A brief survey of work that builds on AgentDojo finds that this annotation is rarely used; indeed, the AgentDojo paper itself doesn't use it. Difficulty can be better approximated by other metrics, which can be dynamically tracked: these include number of turns required to complete a task (length) and the number of dynamic replanning steps required for a task. (Both these metrics are taken from the AgentDyn extension.)
+- Remove the `DIFFICULTY` annotation on tasks. A brief survey of work that builds on AgentDojo finds that this annotation is rarely used; indeed, the AgentDojo paper itself doesn't use it. Difficulty can be better approximated by other metrics, which can be dynamically tracked: these include number of turns required to complete a task (length) and the number of dynamic replanning steps required for a task. (Both these metrics are taken from the AgentDyn extension.)
 - Only include the latest version of each default suite. Versioning is no longer done through hard-coded directories; instead, it can be done through Git commit hashes or actual version releases.
 - Include all AgentDyn suites.
 - Parallel execution of tasks (instead of just parallelism at the suite level, which seems to be broken in AgentDojo anyways).
