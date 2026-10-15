@@ -241,7 +241,10 @@ impl<S: Suite> Episode<S> {
             (Some(injection), Some(attack)) => {
                 let model_name = model_name.unwrap_or(DEFAULT_MODEL_NAME);
                 // Recomputed for every episode. Cache these per user task and per injection
-                // task if episodes become frequent enough for it to matter.
+                // task if episodes become frequent enough or expensive enough (to compute)
+                // for it to matter. Caching would also complicate the story for
+                // parallelism, since parallel threads might need to synchronize
+                // on the cache.
                 let vectors = injection_vectors(task, InjectVectors::InjectSeenOnly);
                 let texts = attack_texts(attack, model_name, injection)?;
                 inject_at(&vectors, &texts)
