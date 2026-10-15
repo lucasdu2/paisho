@@ -26,7 +26,7 @@ pub trait Attack {
     /// out a user task's vectors.
     fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
-        I: Injection,
+        I: Injection + ?Sized,
         I::Env: SuiteEnvironment;
 }
 
@@ -79,7 +79,7 @@ impl Attack for ImportantInstructions {
 
     fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
-        I: Injection,
+        I: Injection + ?Sized,
         I::Env: SuiteEnvironment,
     {
         uniform::<I::Env>(&self.render(&injection_task.goal()))
@@ -133,7 +133,7 @@ impl Attack for ToolKnowledge {
 
     fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
-        I: Injection,
+        I: Injection + ?Sized,
         I::Env: SuiteEnvironment,
     {
         uniform::<I::Env>(&self.render(&injection_task.goal(), &tools_sequence(injection_task)))
@@ -238,7 +238,7 @@ where
 /// (AgentDojo's `ToolKnowledgeAttack.get_tools_sequence`). Arguments are written as JSON.
 fn tools_sequence<I>(injection_task: &I) -> String
 where
-    I: Injection,
+    I: Injection + ?Sized,
     I::Env: SuiteEnvironment,
 {
     let pre_env = I::Env::with_injections(&HashMap::new())
@@ -486,7 +486,13 @@ mod tests {
             String::new()
         }
 
-        fn utility(&self, _pre_env: &SlackWeb, _post_env: &SlackWeb, _trace: &[ToolCall]) -> bool {
+        fn utility(
+            &self,
+            _output: &str,
+            _pre_env: &SlackWeb,
+            _post_env: &SlackWeb,
+            _trace: &[ToolCall],
+        ) -> bool {
             true
         }
     }

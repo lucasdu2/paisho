@@ -17,8 +17,15 @@ pub trait Task {
     fn task_output_reference(&self) -> String;
 
     /// Predicate that checks if a task is considered to be successfully completed.
-    /// `trace` is every tool call the agent made during the episode, in order.
-    fn utility(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
+    /// `output` is the agent's final text answer (empty if it gave none), and `trace` is
+    /// every tool call the agent made during the episode, in order.
+    fn utility(
+        &self,
+        output: &str,
+        pre_env: &Self::Env,
+        post_env: &Self::Env,
+        trace: &[ToolCall],
+    ) -> bool;
 }
 
 // =============================================================================
@@ -108,12 +115,13 @@ macro_rules! combine_tasks {
             // Every task sees the whole trace, as in AgentDojo's `TaskCombinator`.
             fn utility(
                 &self,
+                output: &str,
                 pre_env: &Self::Env,
                 post_env: &Self::Env,
                 trace: &[$crate::suites::ToolCall],
             ) -> bool {
-                $crate::suites::Task::utility(&$first, pre_env, post_env, trace)
-                    $(&& $crate::suites::Task::utility(&$rest, pre_env, post_env, trace))*
+                $crate::suites::Task::utility(&$first, output, pre_env, post_env, trace)
+                    $(&& $crate::suites::Task::utility(&$rest, output, pre_env, post_env, trace))*
             }
         }
     };
@@ -151,8 +159,15 @@ pub trait Injection {
     fn injection_output_reference(&self) -> String;
 
     /// Predicate that checks if the injection goal was achieved.
-    /// `trace` is every tool call the agent made during the episode, in order.
-    fn security(&self, pre_env: &Self::Env, post_env: &Self::Env, trace: &[ToolCall]) -> bool;
+    /// `output` is the agent's final text answer (empty if it gave none), and `trace` is
+    /// every tool call the agent made during the episode, in order.
+    fn security(
+        &self,
+        output: &str,
+        pre_env: &Self::Env,
+        post_env: &Self::Env,
+        trace: &[ToolCall],
+    ) -> bool;
 }
 
 /// The starting environment of a suite, into which an attack can place injections.
@@ -168,6 +183,101 @@ pub trait SuiteEnvironment: Environment + Clone {
     /// Returns [`UnknownInjections`] listing every ID in `injections` the suite doesn't have.
     fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections>;
 }
+
+/// A benchmark suite: its starting environment and its tasks, which can be looked up by
+/// AgentDojo's IDs (such as `"user_task_0"`). Define one with [`define_suite!`].
+pub trait Suite: 'static {
+    type Env: SuiteEnvironment + 'static;
+
+    /// The suite's name in AgentDojo, such as `"slack"`.
+    const NAME: &'static str;
+
+    /// Every user task with its type name, in order.
+    const USER_TASKS: &'static [(&'static str, &'static dyn Task<Env = Self::Env>)];
+
+    /// Every injection task with its type name, in order.
+    const INJECTION_TASKS: &'static [(&'static str, &'static dyn Injection<Env = Self::Env>)];
+
+    /// The user task with AgentDojo's ID `id`, such as `"user_task_0"`.
+    fn user_task(id: &str) -> Option<&'static dyn Task<Env = Self::Env>> {
+        Self::USER_TASKS
+            .iter()
+            .find(|(type_name, _)| agentdojo_id(type_name) == id)
+            .map(|(_, task)| *task)
+    }
+
+    /// The injection task with AgentDojo's ID `id`, such as `"injection_task_1"`.
+    fn injection_task(id: &str) -> Option<&'static dyn Injection<Env = Self::Env>> {
+        Self::INJECTION_TASKS
+            .iter()
+            .find(|(type_name, _)| agentdojo_id(type_name) == id)
+            .map(|(_, task)| *task)
+    }
+}
+
+/// AgentDojo's ID for the task type named `type_name`: `UserTask12` is `user_task_12` and
+/// `InjectionTask1` is `injection_task_1`. An underscore goes before each capital letter
+/// after the first and before each run of digits, and letters are lowercased.
+pub fn agentdojo_id(type_name: &str) -> String {
+    let mut id = String::new();
+    let mut prev: Option<char> = None;
+    for c in type_name.chars() {
+        let starts_word = c.is_ascii_uppercase()
+            || (c.is_ascii_digit() && !prev.is_some_and(|p| p.is_ascii_digit()));
+        if starts_word && prev.is_some() {
+            id.push('_');
+        }
+        id.push(c.to_ascii_lowercase());
+        prev = Some(c);
+    }
+    id
+}
+
+/// Defines a unit struct for a suite and implements [`Suite`] for it, listing its tasks.
+/// Each task must be a unit struct whose `Env` is the suite's `env`; its AgentDojo ID is
+/// derived from its type name (see [`agentdojo_id`]).
+///
+/// ```ignore
+/// define_suite! {
+///     pub struct SlackSuite {
+///         name: "slack",
+///         env: SlackWeb,
+///         user_tasks: [UserTask0, UserTask1],
+///         injection_tasks: [InjectionTask1],
+///     }
+/// }
+/// ```
+macro_rules! define_suite {
+    (
+        $(#[$meta:meta])*
+        $vis:vis struct $name:ident {
+            name: $suite_name:expr,
+            env: $env:ty,
+            user_tasks: [$($user_task:ident),* $(,)?],
+            injection_tasks: [$($injection_task:ident),* $(,)?] $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        $vis struct $name;
+
+        impl $crate::suites::Suite for $name {
+            type Env = $env;
+
+            const NAME: &'static str = $suite_name;
+
+            const USER_TASKS: &'static [(
+                &'static str,
+                &'static dyn $crate::suites::Task<Env = $env>,
+            )] = &[$((stringify!($user_task), &$user_task)),*];
+
+            const INJECTION_TASKS: &'static [(
+                &'static str,
+                &'static dyn $crate::suites::Injection<Env = $env>,
+            )] = &[$((stringify!($injection_task), &$injection_task)),*];
+        }
+    };
+}
+pub(crate) use define_suite;
 
 /// An environment for one episode that records every tool call it dispatches, in order.
 /// The recorded trace is what `Task::utility` and `Injection::security` receive.

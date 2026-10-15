@@ -5,7 +5,10 @@ use std::collections::HashMap;
 
 use crate::environments::slack::Message;
 use crate::environments::{assert_tools_provided, combine_environments, slack::Slack, web::Web};
-use crate::suites::{SuiteEnvironment, UnknownInjections};
+use crate::suites::{SuiteEnvironment, UnknownInjections, define_suite};
+use injections::*;
+use tasks::*;
+
 combine_environments! {
     #[derive(Clone)]
     pub struct SlackWeb {
@@ -45,6 +48,22 @@ impl SuiteEnvironment for SlackWeb {
 
     fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections> {
         SlackWeb::populate_suite_environment(injections)
+    }
+}
+
+define_suite! {
+    /// AgentDojo's v1 Slack suite.
+    pub struct SlackSuite {
+        name: "slack",
+        env: SlackWeb,
+        user_tasks: [
+            UserTask0, UserTask1, UserTask2, UserTask3, UserTask4, UserTask5, UserTask6,
+            UserTask7, UserTask8, UserTask9, UserTask10, UserTask11, UserTask12, UserTask13,
+            UserTask14, UserTask15, UserTask16, UserTask17, UserTask18, UserTask19, UserTask20,
+        ],
+        injection_tasks: [
+            InjectionTask1, InjectionTask2, InjectionTask3, InjectionTask4, InjectionTask5,
+        ],
     }
 }
 
@@ -239,5 +258,85 @@ fn message(sender: &str, recipient: &str, body: &str) -> Message {
         sender: sender.to_string(),
         recipient: recipient.to_string(),
         body: body.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::suites::{Suite, agentdojo_id};
+
+    /// Names of the structs declared as `pub struct <prefix><digits>` in `source`, in order.
+    /// This also finds tasks declared inside `combine_tasks!`, which uses the same syntax.
+    fn declared_tasks(source: &str, prefix: &str) -> Vec<String> {
+        source
+            .split("pub struct ")
+            .skip(1)
+            .filter_map(|rest| {
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                let digits = name.strip_prefix(prefix)?;
+                (!digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())).then_some(name)
+            })
+            .collect()
+    }
+
+    /// Fails if a task struct declared in `tasks.rs` or `injections.rs` is missing from
+    /// `define_suite!`, or if the suite lists a task twice. `include_str!` makes Cargo
+    /// rebuild the test when either file changes.
+    #[test]
+    fn slack_suite_lists_every_declared_task() {
+        let user_tasks = declared_tasks(include_str!("slack/tasks.rs"), "UserTask");
+        let listed: Vec<&str> = SlackSuite::USER_TASKS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        assert_eq!(listed, user_tasks, "define_suite! user_tasks vs. tasks.rs");
+
+        let injection_tasks = declared_tasks(include_str!("slack/injections.rs"), "InjectionTask");
+        let listed: Vec<&str> = SlackSuite::INJECTION_TASKS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        assert_eq!(
+            listed, injection_tasks,
+            "define_suite! injection_tasks vs. injections.rs"
+        );
+    }
+
+    #[test]
+    fn agentdojo_ids() {
+        assert_eq!(agentdojo_id("UserTask0"), "user_task_0");
+        assert_eq!(agentdojo_id("UserTask12"), "user_task_12");
+        assert_eq!(agentdojo_id("InjectionTask5"), "injection_task_5");
+    }
+
+    #[test]
+    fn slack_suite_lists_every_task_under_its_agentdojo_id() {
+        assert_eq!(SlackSuite::NAME, "slack");
+        assert_eq!(SlackSuite::USER_TASKS.len(), 21);
+        assert_eq!(SlackSuite::INJECTION_TASKS.len(), 5);
+        for i in 0..21 {
+            let task = SlackSuite::user_task(&format!("user_task_{i}"));
+            let (_, expected) = SlackSuite::USER_TASKS[i];
+            assert_eq!(
+                task.map(|t| t.prompt()),
+                Some(expected.prompt()),
+                "user_task_{i}"
+            );
+        }
+        for i in 1..=5 {
+            let task = SlackSuite::injection_task(&format!("injection_task_{i}"));
+            let (_, expected) = SlackSuite::INJECTION_TASKS[i - 1];
+            assert_eq!(
+                task.map(|t| t.goal()),
+                Some(expected.goal()),
+                "injection_task_{i}"
+            );
+        }
+        assert!(SlackSuite::user_task("user_task_21").is_none());
+        assert!(SlackSuite::injection_task("injection_task_0").is_none());
     }
 }
