@@ -18,7 +18,6 @@ pub enum InjectVectors {
 
 pub trait Attack {
     fn attack_name(&self) -> String;
-    fn attack_summary(&self) -> String;
 
     /// The text to inject at each injection vector in the suite, by injection ID, to steer the
     /// agent toward `injection_task`'s goal. Leaving a vector out means the attack doesn't
@@ -78,12 +77,6 @@ impl Attack for ImportantInstructions {
         "important_instructions".to_string()
     }
 
-    fn attack_summary(&self) -> String {
-        "A message, apparently from the user, asking the model to do the injection task's goal \
-         before the user's task."
-            .to_string()
-    }
-
     fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
     where
         I: Injection,
@@ -136,12 +129,6 @@ impl ToolKnowledge {
 impl Attack for ToolKnowledge {
     fn attack_name(&self) -> String {
         "tool_knowledge".to_string()
-    }
-
-    fn attack_summary(&self) -> String {
-        "important_instructions, plus the sequence of tool calls that achieves the injection \
-         task's goal."
-            .to_string()
     }
 
     fn injection_texts<I>(&self, injection_task: &I) -> HashMap<String, String>
