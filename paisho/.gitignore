@@ -15,3 +15,8 @@ target
 
 # rustc will dump stack traces when hitting an internal compiler error to PWD
 rustc-ice-*.txt
+
+# Benchmark results written by the paisho server (its default logdir; see `src/results.rs`).
+# They are generated output, one JSON file per episode, and can be large and specific to
+# whoever ran the benchmark, so they don't belong in version control.
+runs/
