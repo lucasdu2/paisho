@@ -295,7 +295,8 @@ pub enum ToolContent {
 }
 
 impl ToolResult {
-    /// A successful result: `value` as structured content, mirrored as JSON text.
+    /// A successful result: `value` as structured content, mirrored as text for the model.
+    /// A string is mirrored as itself, as the tool returned it; any other value as JSON.
     /// Tools returning `()` serialize to `null` and get a plain "Success" instead.
     pub fn success(value: serde_json::Value) -> Self {
         if value.is_null() {
@@ -308,11 +309,15 @@ impl ToolResult {
                 is_error: false,
             };
         }
+        // `Value::to_string` would write a string as a JSON literal, quoted and with its
+        // newlines escaped, which isn't what the tool returned.
+        let text = match &value {
+            serde_json::Value::String(text) => text.clone(),
+            other => other.to_string(),
+        };
         ToolResult {
             result_type: "complete",
-            content: vec![ToolContent::Text {
-                text: value.to_string(),
-            }],
+            content: vec![ToolContent::Text { text }],
             structured_content: Some(value),
             is_error: false,
         }
@@ -378,5 +383,42 @@ pub(crate) mod testing {
             assert!(!result.is_error, "{call:?} failed: {:?}", result.content);
         }
         episode
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{ToolContent, ToolResult};
+
+    fn text(result: &ToolResult) -> &str {
+        let ToolContent::Text { text } = &result.content[0];
+        text
+    }
+
+    #[test]
+    fn string_results_are_plain_text() {
+        let result = ToolResult::success(json!("line one\nline \"two\""));
+        assert_eq!(text(&result), "line one\nline \"two\"");
+        assert_eq!(
+            result.structured_content,
+            Some(json!("line one\nline \"two\""))
+        );
+    }
+
+    #[test]
+    fn other_results_are_json_text() {
+        let value = json!([{ "sender": "Alice", "body": "hi\nthere" }]);
+        let result = ToolResult::success(value.clone());
+        assert_eq!(text(&result), value.to_string());
+        assert_eq!(result.structured_content, Some(value));
+    }
+
+    #[test]
+    fn unit_results_are_success() {
+        let result = ToolResult::success(serde_json::Value::Null);
+        assert_eq!(text(&result), "Success");
+        assert_eq!(result.structured_content, None);
     }
 }
