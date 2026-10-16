@@ -1,0 +1,4 @@
+# Python bytecode and test caches.
+__pycache__/
+.pytest_cache/
+*.egg-info/

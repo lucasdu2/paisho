@@ -1,0 +1,21 @@
+[project]
+name = "paisho-agentdojo"
+version = "0.1.0"
+description = "Run paisho benchmarks with AgentDojo's agent pipelines"
+requires-python = ">=3.10"
+# AgentDyn's harness, pinned to an upstream commit. AgentDyn isn't on PyPI, and its package
+# is named `agentdojo` (version 0.1.35, like AgentDojo's), so only the commit identifies it.
+# Installing this replaces any other `agentdojo` in the environment.
+dependencies = [
+    "agentdojo @ git+https://github.com/SaFo-Lab/AgentDyn@5353cf7615b135cace8d07c8f12dac53a16b6db3",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["paisho_agentdojo"]
