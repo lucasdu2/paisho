@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, spanned::Spanned, Error, Expr, FnArg, ImplItem, ItemImpl, Lit, Meta, Pat,
-    ReturnType, Type,
+    Error, Expr, FnArg, ImplItem, ItemImpl, Lit, Meta, Pat, ReturnType, Type, parse_macro_input,
+    spanned::Spanned,
 };
 
 /// Turns every method in an `impl` block into a tool callable through `dispatch`.
