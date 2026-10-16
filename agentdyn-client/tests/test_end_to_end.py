@@ -18,8 +18,8 @@ from agentdojo.types import ChatAssistantMessage, ChatMessage, text_content_bloc
 from paisho_agentdojo.client import PaishoClient
 from paisho_agentdojo.run import run_benchmark
 
-# The paisho crate, from `agentdyn-client/agentdojo/tests/`.
-CRATE = Path(__file__).resolve().parents[3] / "paisho"
+# The paisho crate, from `agentdyn-client/tests/`.
+CRATE = Path(__file__).resolve().parents[2] / "paisho"
 
 
 class ScriptedLLM(BasePipelineElement):

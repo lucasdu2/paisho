@@ -7,7 +7,7 @@ unchanged (by default the undefended one); only its tools come from paisho, thro
 evaluates the episode and saves its result.
 
 [!NOTE]
-This client is entirely Claude-generated, with no real oversight. It is throwaway code that is not designed to be maintained. Also: this client directly pulls in AgentDyn's agent harness, which supports older models that maybe deprecated/
+This client is entirely Claude-generated, with no real oversight. It is throwaway code that is not designed to be maintained. Also: this client directly pulls in AgentDyn's agent harness, which supports older models that maybe deprecated.
 
 paisho runs as a separate server process; this package talks to it over its socket.
 
