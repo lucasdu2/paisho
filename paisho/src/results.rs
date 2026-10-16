@@ -19,8 +19,30 @@ use serde::{Deserialize, Serialize};
 
 use crate::suites::ToolResult;
 
-/// Written to every file so results from different versions of paisho can be told apart.
-pub const PAISHO_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Which build of paisho wrote a file, so results can be traced to the code that produced
+/// them. Written to `benchmark.json` and to every result file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Build {
+    /// The package version in `Cargo.toml`, which isn't updated for every change.
+    pub paisho_version: String,
+    /// The git commit paisho was built from; `None` if built outside a git checkout.
+    pub paisho_commit: Option<String>,
+    /// Whether paisho's files had uncommitted changes at build time, so `paisho_commit`
+    /// doesn't fully describe the code; `None` if unknown.
+    pub paisho_dirty: Option<bool>,
+}
+
+impl Build {
+    /// This build, as recorded by `build.rs`.
+    pub fn current() -> Self {
+        let known = |value: &'static str| (value != "unknown").then_some(value);
+        Build {
+            paisho_version: env!("CARGO_PKG_VERSION").to_string(),
+            paisho_commit: known(env!("PAISHO_GIT_COMMIT")).map(str::to_string),
+            paisho_dirty: known(env!("PAISHO_GIT_DIRTY")).map(|dirty| dirty == "true"),
+        }
+    }
+}
 
 /// What a benchmark runs: every episode of each suite under each attack.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,11 +55,16 @@ pub struct BenchmarkConfig {
     pub model_name: Option<String>,
 }
 
-/// One episode of a benchmark. `attack` and `injection` are both `None` for a benign episode.
+/// One episode of a benchmark, one of three kinds:
+///
+/// - benign: a `task` alone;
+/// - attacked: a `task` with an `injection` placed by an `attack`;
+/// - injection alone: an `injection` with neither, whose goal is the prompt. This checks
+///   whether the agent can achieve the goal when simply asked to.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EpisodeKey {
     pub suite: String,
-    pub task: String,
+    pub task: Option<String>,
     pub attack: Option<String>,
     pub injection: Option<String>,
 }
@@ -66,14 +93,17 @@ pub struct EpisodeResult {
     pub tool_calls: Vec<ToolCallRecord>,
     /// The agent's final text answer (empty if it gave none).
     pub output: String,
-    pub utility: bool,
-    /// Whether the attack succeeded; `None` for a benign episode.
+    /// Whether the task was completed; `None` for an injection alone.
+    pub utility: Option<bool>,
+    /// Whether the injection's goal was achieved (for an attacked episode, whether the attack
+    /// succeeded); `None` for a benign episode.
     pub security: Option<bool>,
     /// Seconds from `start` to `finish`.
     pub duration: f64,
     /// When the episode finished, in seconds since the Unix epoch.
     pub finished_at: f64,
-    pub paisho_version: &'static str,
+    #[serde(flatten)]
+    pub build: Build,
 }
 
 /// The on-disk form of [`BenchmarkConfig`].
@@ -81,7 +111,9 @@ pub struct EpisodeResult {
 struct ConfigFile {
     #[serde(flatten)]
     config: BenchmarkConfig,
-    paisho_version: String,
+    /// The build that registered the benchmark. Not checked when resuming.
+    #[serde(flatten)]
+    build: Build,
 }
 
 /// Checks that `name` can be used as a directory name: non-empty, and only ASCII letters,
@@ -122,7 +154,7 @@ pub fn register(logdir: &Path, config: &BenchmarkConfig) -> Result<bool, String>
         Ok(mut file) => {
             let contents = ConfigFile {
                 config: config.clone(),
-                paisho_version: PAISHO_VERSION.to_string(),
+                build: Build::current(),
             };
             let json = serde_json::to_string_pretty(&contents).expect("config serializes");
             file.write_all(json.as_bytes())
@@ -162,25 +194,30 @@ pub fn load_config(logdir: &Path, name: &str) -> Result<BenchmarkConfig, String>
 }
 
 /// The result file of `key` in the benchmark `benchmark`.
+///
+/// An injection alone is saved where AgentDojo saves it, as if the injection were a task:
+/// `<suite>/<injection>/none/none.json`.
 pub fn result_path(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> PathBuf {
-    logdir
-        .join(benchmark)
-        .join(&key.suite)
-        .join(&key.task)
-        .join(key.attack.as_deref().unwrap_or("none"))
-        .join(format!(
-            "{}.json",
-            key.injection.as_deref().unwrap_or("none")
-        ))
+    let suite = logdir.join(benchmark).join(&key.suite);
+    match (&key.task, &key.injection) {
+        (Some(task), injection) => suite
+            .join(task)
+            .join(key.attack.as_deref().unwrap_or("none"))
+            .join(format!("{}.json", injection.as_deref().unwrap_or("none"))),
+        (None, Some(injection)) => suite.join(injection).join("none").join("none.json"),
+        (None, None) => unreachable!("an episode has a task, an injection, or both"),
+    }
 }
 
-/// Whether `key` already has a result in the benchmark: its file exists and records a
-/// `utility`. A file that can't be read or parsed doesn't count, so the episode is rerun.
+/// Whether `key` already has a result in the benchmark: its file exists and records an
+/// evaluation (`utility` and `security`, either of which may be `null`). A file that can't be
+/// read or parsed doesn't count, so the episode is rerun.
 pub fn is_complete(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> bool {
     fs::read_to_string(result_path(logdir, benchmark, key))
         .ok()
         .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
-        .is_some_and(|result| result["utility"].is_boolean())
+        .and_then(|result| result.as_object().cloned())
+        .is_some_and(|result| result.contains_key("utility") && result.contains_key("security"))
 }
 
 /// Saves `result` to its result file, replacing any earlier result for the same episode.
@@ -202,4 +239,24 @@ pub fn save(logdir: &Path, result: &EpisodeResult) -> io::Result<PathBuf> {
     fs::write(&temp, json)?;
     fs::rename(&temp, &path)?;
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Build;
+
+    /// `build.rs` recorded either a full commit hash and whether it was dirty, or neither.
+    #[test]
+    fn build_records_the_commit() {
+        let build = Build::current();
+        assert_eq!(build.paisho_version, env!("CARGO_PKG_VERSION"));
+        match &build.paisho_commit {
+            Some(commit) => {
+                assert_eq!(commit.len(), 40, "{commit}");
+                assert!(commit.chars().all(|c| c.is_ascii_hexdigit()), "{commit}");
+                assert!(build.paisho_dirty.is_some());
+            }
+            None => assert_eq!(build.paisho_dirty, None),
+        }
+    }
 }
