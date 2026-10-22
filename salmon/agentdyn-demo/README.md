@@ -1,6 +1,9 @@
 # paisho-agentdojo
-A sample client for paisho, intended as a template for interaction with paisho (for the Python-inclined) as well as a quick sanity check that paisho is working as expected.
+A sample Python client for paisho that borrows most of its functionality from AgentDyn's built-in harness. It is intended as a small example of interaction with paisho for the Python-inclined, as well as a quick sanity check that paisho is working as expected.
 
+This client is Claude-generated with minimal oversight and has a strong dependency on an external project (AgentDyn): it is not designed to be maintained.
+
+## Overview
 Runs paisho benchmarks with the agent pipelines of [AgentDyn](https://github.com/SaFo-Lab/AgentDyn),
 an extension of [AgentDojo](https://github.com/ethz-spylab/agentdojo). The pipeline is used
 unchanged (by default the undefended one); only its tools come from paisho, through
