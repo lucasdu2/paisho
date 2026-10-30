@@ -44,6 +44,8 @@ const INJECTION_DEFAULTS: [(&str, &str); 6] = [
 ];
 
 impl SuiteEnvironment for SlackWeb {
+    const TOOLS: &'static [&'static str] = &TOOLS;
+
     const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)] = &INJECTION_DEFAULTS;
 
     fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections> {
@@ -339,6 +341,38 @@ mod tests {
             declared_tasks(include_str!("slack/injections.rs"), "Injection"),
             "SlackSuite::INJECTIONS vs. injections.rs"
         );
+    }
+
+    /// `Web` also provides `download_file`, which AgentDojo's Slack suite doesn't offer.
+    #[test]
+    fn episodes_offer_only_the_suites_tools() {
+        use crate::environments::Environment;
+        use crate::suites::{Recording, ToolError, call};
+
+        let mut episode = Recording::new(SlackWeb::with_injections(&HashMap::new()).unwrap());
+        let names: Vec<serde_json::Value> = episode
+            .tool_schemas()
+            .into_iter()
+            .map(|schema| schema["name"].clone())
+            .collect();
+        assert_eq!(names, TOOLS);
+
+        assert!(SlackWeb::TOOL_NAMES.contains(&"download_file"));
+        assert!(episode.tool_schema("download_file").is_none());
+        let download = call(
+            "download_file",
+            serde_json::json!({ "url": "www.example.com", "file_name": "x" }),
+        );
+        assert!(matches!(
+            episode.dispatch(&download),
+            Err(ToolError::UnknownTool(name)) if name == "download_file"
+        ));
+        assert_eq!(episode.trace, [download]);
+    }
+
+    #[test]
+    fn reference_traces_use_only_the_suites_tools() {
+        crate::suites::testing::assert_reference_traces_use_suite_tools::<SlackSuite>();
     }
 
     #[test]

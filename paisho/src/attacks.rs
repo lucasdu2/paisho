@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use crate::environments::Environment;
-use crate::suites::{Injection, SuiteEnvironment, Task, ToolContent};
+use crate::suites::{Injection, Recording, SuiteEnvironment, Task, ToolContent};
 
 /// InjectVectors specifies the injection strategy: InjectAll means we inject at
 /// all possible injection vectors in an environment; InjectSeenOnly means we
@@ -162,7 +162,7 @@ fn uniform<E: SuiteEnvironment>(text: &str) -> HashMap<String, String> {
 /// so compute them once per user task and reuse them for every injection task.
 ///
 /// For [`InjectVectors::InjectSeenOnly`], these are the IDs whose text the model sees when the
-/// task is done correctly, found as AgentDojo does: put a unique canary at every injection
+/// task is done correctly, found as in AgentDojo: put a unique canary at every injection
 /// vector, run the task's reference trace, and keep the IDs whose canary is in a tool result.
 pub fn injection_vectors<T>(task: &T, vectors: InjectVectors) -> Vec<String>
 where
@@ -181,9 +181,10 @@ where
                     (id, canary)
                 })
                 .collect();
-            let mut env = T::Env::with_injections(&canaries)
+            let pre_env = T::Env::with_injections(&canaries)
                 .expect("the suite's own injection IDs are known");
-            let pre_env = env.clone();
+            // Recorded so that, as in an episode, only the suite's tools can be called.
+            let mut env = Recording::new(pre_env.clone());
 
             let mut seen_text = String::new();
             for call in task.task_trace_reference(&pre_env) {

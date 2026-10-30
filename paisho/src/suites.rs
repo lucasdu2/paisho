@@ -172,6 +172,10 @@ pub trait Injection {
 
 /// The starting environment of a suite, into which an attack can place injections.
 pub trait SuiteEnvironment: Environment + Clone {
+    /// The names of the tools the agent may use in this suite, in the order they are shown
+    /// to it. Each must be a tool the environment provides; [`Recording`] hides the rest.
+    const TOOLS: &'static [&'static str];
+
     /// Every injection ID in the environment, with the text it holds when not attacked.
     const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)];
 
@@ -218,6 +222,9 @@ pub trait Suite: 'static {
 /// An environment for one episode that records every tool call it dispatches, in order.
 /// The recorded trace is what `Task::utility` and `Injection::security` receive.
 ///
+/// Only the suite's [`SuiteEnvironment::TOOLS`] are exposed: other tools the environment
+/// provides are left out of the schemas, and calls to them fail as unknown tools.
+///
 /// Wrap only the outermost environment (e.g. `SlackWeb`, not its `slack` field too), so each
 /// call is recorded exactly once.
 pub struct Recording<E> {
@@ -235,19 +242,35 @@ impl<E> Recording<E> {
     }
 }
 
-impl<E: Environment> Environment for Recording<E> {
+impl<E: SuiteEnvironment> Recording<E> {
+    fn allows(name: &str) -> bool {
+        E::TOOLS.contains(&name)
+    }
+}
+
+impl<E: SuiteEnvironment> Environment for Recording<E> {
     fn tool_schemas(&self) -> Vec<serde_json::Value> {
-        self.env.tool_schemas()
+        E::TOOLS
+            .iter()
+            .filter_map(|name| self.env.tool_schema(name))
+            .collect()
     }
 
     fn tool_schema(&self, name: &str) -> Option<serde_json::Value> {
-        self.env.tool_schema(name)
+        if Self::allows(name) {
+            self.env.tool_schema(name)
+        } else {
+            None
+        }
     }
 
     fn dispatch(&mut self, call: &ToolCall) -> Result<ToolResult, ToolError> {
         // Recorded before dispatching so that calls to unknown tools and calls that fail
         // are in the trace too, as in AgentDojo, whose trace is every call the model made.
         self.trace.push(call.clone());
+        if !Self::allows(&call.name) {
+            return Err(ToolError::UnknownTool(call.name.clone()));
+        }
         self.env.dispatch(call)
     }
 }
@@ -364,25 +387,54 @@ impl std::error::Error for UnknownInjections {}
 
 #[cfg(test)]
 pub(crate) mod testing {
-    use super::{Recording, ToolCall};
+    use std::collections::HashMap;
+
+    use super::{Recording, Suite, SuiteEnvironment, ToolCall};
     use crate::environments::Environment;
 
     /// Runs `trace` in a new episode starting from `pre_env` and returns the episode.
     ///
     /// # Panics
     ///
-    /// Panics if a call names a tool the environment doesn't have, or if a tool returns an
+    /// Panics if a call names a tool the suite doesn't offer, or if a tool returns an
     /// error (such as for a misspelled argument name).
-    pub(crate) fn run_trace<E: Environment + Clone>(
-        pre_env: &E,
-        trace: &[ToolCall],
-    ) -> Recording<E> {
+    pub(crate) fn run_trace<E: SuiteEnvironment>(pre_env: &E, trace: &[ToolCall]) -> Recording<E> {
         let mut episode = Recording::new(pre_env.clone());
         for call in trace {
             let result = episode.dispatch(call).unwrap_or_else(|e| panic!("{e}"));
             assert!(!result.is_error, "{call:?} failed: {:?}", result.content);
         }
         episode
+    }
+
+    /// Checks that every reference trace in suite `S` calls only the suite's tools, for each
+    /// user task and for each injection task (symbolic or not). A call to any other tool
+    /// would fail as unknown in an episode, and `injection_vectors` would skip it without
+    /// saying so, missing any injection vector it would have shown the model.
+    ///
+    /// # Panics
+    ///
+    /// Panics naming the first task and tool that break this.
+    pub(crate) fn assert_reference_traces_use_suite_tools<S: Suite>() {
+        let pre_env = S::Env::with_injections(&HashMap::new())
+            .expect("no injections means no unknown injection IDs");
+        let check = |id: &str, trace: Vec<ToolCall>| {
+            for call in trace {
+                assert!(
+                    S::Env::TOOLS.contains(&call.name.as_str()),
+                    "{id} in suite {} calls {}, which is not in the suite's TOOLS",
+                    S::NAME,
+                    call.name,
+                );
+            }
+        };
+        for (id, task) in S::TASKS {
+            check(id, task.task_trace_reference(&pre_env));
+        }
+        for (id, injection) in S::INJECTIONS {
+            check(id, injection.injection_trace_reference(&pre_env, false));
+            check(id, injection.injection_trace_reference(&pre_env, true));
+        }
     }
 }
 
