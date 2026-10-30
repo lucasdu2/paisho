@@ -584,10 +584,11 @@ fn start(
         if !config.suites.contains(&key.suite) {
             return Err(format!("suite {} is not in benchmark {name}", key.suite));
         }
-        if let Some(attack) = &key.attack
-            && !config.attacks.contains(attack)
-        {
-            return Err(format!("attack {attack} is not in benchmark {name}"));
+        match &key.attack {
+            Some(attack) if !config.attacks.contains(attack) => {
+                return Err(format!("attack {attack} is not in benchmark {name}"));
+            }
+            _ => {}
         }
         match (&model_name, &config.model_name) {
             (None, _) => model_name = config.model_name,
