@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -681,7 +682,7 @@ fn serve_connection(conn: Stream, logdir: &Path) -> io::Result<()> {
             return Ok(());
         }
         let response = match serde_json::from_str::<Request>(&line) {
-            Ok(request) => handle(request, &mut episode, logdir),
+            Ok(request) => catch_panics(&mut episode, |episode| handle(request, episode, logdir)),
             Err(e) => Response::Error {
                 message: format!("malformed request: {e}"),
             },
@@ -689,6 +690,33 @@ fn serve_connection(conn: Stream, logdir: &Path) -> io::Result<()> {
         let mut out = serde_json::to_string(&response).expect("responses serialize to JSON");
         out.push('\n');
         conn.get_mut().write_all(out.as_bytes())?;
+    }
+}
+
+/// Runs `handle` on the connection's current episode, turning a panic (a bug in paisho, such
+/// as in a tool or a task's checks) into an error response so the connection stays open.
+/// The current episode is dropped after a panic, since it may have been left half-updated.
+fn catch_panics(
+    current: &mut Option<ActiveEpisode>,
+    handle: impl FnOnce(&mut Option<ActiveEpisode>) -> Response,
+) -> Response {
+    // Unwind safety: on a panic, the only state the closure could have left inconsistent is
+    // `current`, which is discarded below.
+    match panic::catch_unwind(AssertUnwindSafe(|| handle(&mut *current))) {
+        Ok(response) => response,
+        Err(payload) => {
+            *current = None;
+            let reason = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("unknown cause");
+            Response::Error {
+                message: format!(
+                    "internal error in paisho: {reason}; the current episode was discarded"
+                ),
+            }
+        }
     }
 }
 
@@ -720,8 +748,8 @@ pub fn run(name: &str, logdir: PathBuf) -> io::Result<()> {
     // Each client gets its own thread, so clients run their episodes in parallel. Nothing
     // in memory is shared between connections: each owns its episode, and suites and tasks
     // are read-only constants. Benchmarks are shared through `logdir`, where each episode
-    // writes its own file (see `results`). A panic while serving a client ends only that
-    // client's thread.
+    // writes its own file (see `results`). A panic while handling a request is caught by
+    // `catch_panics`; one anywhere else ends only that client's thread.
     for conn in listener.incoming() {
         match conn {
             Ok(conn) => {
@@ -766,7 +794,11 @@ mod tests {
         /// The JSON response the server would send for the request written as `request`.
         fn send(&mut self, request: Value) -> Value {
             let request: Request = serde_json::from_value(request).unwrap();
-            serde_json::to_value(handle(request, &mut self.current, &self.logdir)).unwrap()
+            let logdir = &self.logdir;
+            let response = catch_panics(&mut self.current, |current| {
+                handle(request, current, logdir)
+            });
+            serde_json::to_value(response).unwrap()
         }
     }
 
@@ -964,6 +996,32 @@ mod tests {
         let pending = resumed["pending"].as_array().unwrap();
         assert_eq!(resumed["total"], 21 + 5);
         assert_eq!(pending.len(), 21 + 5 - 1);
+    }
+
+    #[test]
+    fn panics_become_errors_and_discard_the_episode() {
+        let mut session = Session::new("panics_become_errors");
+        let started = session.send(json!({
+            "type": "start", "suite": "slack", "task": "user_task_0",
+        }));
+        assert_eq!(started["type"], "started", "{started}");
+
+        let response = catch_panics(&mut session.current, |_| panic!("tool bug"));
+        let Response::Error { message } = response else {
+            panic!("expected an error, got {response:?}");
+        };
+        assert!(message.contains("tool bug"), "{message}");
+        assert!(session.current.is_none());
+
+        let response = session.send(json!({ "type": "list_tools" }));
+        assert_eq!(response["type"], "error", "{response}");
+        assert!(
+            response["message"]
+                .as_str()
+                .unwrap()
+                .contains("no episode in progress"),
+            "{response}"
+        );
     }
 
     #[test]
