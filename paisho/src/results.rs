@@ -91,6 +91,11 @@ pub struct EpisodeResult {
     /// The text placed at each injection vector, by injection ID.
     pub injections: HashMap<String, String>,
     pub tool_calls: Vec<ToolCallRecord>,
+    /// When the client read the environment's state with `get_environment`, each as the
+    /// number of tool calls made before that read. `get_environment` exposes state the agent
+    /// could only partly learn through tools, so each read is recorded to show which
+    /// episodes had that access.
+    pub environment_reads: Vec<usize>,
     /// The agent's final text answer (empty if it gave none).
     pub output: String,
     /// Whether the task was completed; `None` for an injection alone.

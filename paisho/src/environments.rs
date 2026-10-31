@@ -94,6 +94,19 @@ macro_rules! combine_environments {
 }
 pub(crate) use combine_environments;
 
+/// Serializes `map` with its keys sorted, so an environment's JSON doesn't depend on
+/// `HashMap`'s iteration order. Use with `#[serde(serialize_with = "...")]`.
+fn serialize_sorted<S, V>(
+    map: &std::collections::HashMap<String, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    V: serde::Serialize,
+{
+    serde::Serialize::serialize(&map.iter().collect::<std::collections::BTreeMap<_, _>>(), serializer)
+}
+
 /// Joins lists of tool names into one array of length `N` (the total length of `lists`).
 #[doc(hidden)]
 pub const fn concat_tool_names<const N: usize>(lists: &[&[&'static str]]) -> [&'static str; N] {

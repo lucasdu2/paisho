@@ -86,6 +86,13 @@ enum Request {
     },
     /// Lists the tools of the current episode's environment.
     ListTools,
+    /// Returns the current state of the episode's environment, with every tool call made so
+    /// far applied, for defenses whose checks depend on it (such as CaMeL's policies, which
+    /// look up a channel's members before a message is sent to it). This isn't a tool call:
+    /// it doesn't change the environment, isn't in the trace that utility and security are
+    /// judged on, and isn't shown to the agent unless the client passes it on. Each read is
+    /// noted in the episode's result.
+    GetEnvironment,
     /// Calls a tool, like the `params` of an MCP `tools/call` request.
     CallTool {
         name: String,
@@ -141,6 +148,10 @@ enum Response {
     },
     ToolResult {
         result: ToolResult,
+    },
+    /// The suite's environment as JSON, such as `{"slack": {...}, "web": {...}}`.
+    Environment {
+        environment: serde_json::Value,
     },
     /// `utility` is `None` for an injection alone (there's no task), and `security` is
     /// `None` for a benign episode (there's no injection).
@@ -337,6 +348,8 @@ impl<S: Suite> Episode<S> {
 trait RunningEpisode {
     fn prompt(&self) -> String;
     fn tool_schemas(&self) -> Vec<serde_json::Value>;
+    /// The environment's current state as JSON.
+    fn environment(&self) -> serde_json::Value;
     fn injections(&self) -> &HashMap<String, String>;
     fn dispatch(&mut self, call: &ToolCall) -> Result<ToolResult, ToolError>;
     /// Evaluates the episode, given the agent's final text answer: its utility if it had a
@@ -355,6 +368,10 @@ impl<S: Suite> RunningEpisode for Episode<S> {
 
     fn tool_schemas(&self) -> Vec<serde_json::Value> {
         self.recording.tool_schemas()
+    }
+
+    fn environment(&self) -> serde_json::Value {
+        serde_json::to_value(&self.recording.env).expect("environments serialize to JSON")
     }
 
     fn injections(&self) -> &HashMap<String, String> {
@@ -386,6 +403,8 @@ struct ActiveEpisode {
     key: EpisodeKey,
     model_name: Option<String>,
     tool_calls: Vec<ToolCallRecord>,
+    /// The number of tool calls made before each `get_environment` request.
+    environment_reads: Vec<usize>,
     started: Instant,
 }
 
@@ -477,6 +496,15 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
             Some(current) => Response::Tools {
                 tools: current.episode.tool_schemas(),
             },
+            None => no_episode(),
+        },
+        Request::GetEnvironment => match current {
+            Some(current) => {
+                current.environment_reads.push(current.tool_calls.len());
+                Response::Environment {
+                    environment: current.episode.environment(),
+                }
+            }
             None => no_episode(),
         },
         Request::CallTool { name, arguments } => match current {
@@ -624,6 +652,7 @@ fn start(
             .map(|_| model_name.unwrap_or_else(|| DEFAULT_MODEL_NAME.to_string())),
         key,
         tool_calls: Vec::new(),
+        environment_reads: Vec::new(),
         started: Instant::now(),
     })
 }
@@ -643,6 +672,7 @@ fn finish(current: ActiveEpisode, output: Option<String>, logdir: &Path) -> Resp
             model_name: current.model_name,
             injections,
             tool_calls: current.tool_calls,
+            environment_reads: current.environment_reads,
             output,
             utility,
             security,
@@ -948,6 +978,49 @@ mod tests {
         assert_eq!(result["attack"], Value::Null);
         assert_eq!(result["model_name"], Value::Null);
         assert_eq!(result["output"], "");
+    }
+
+    /// `get_environment` shows the state as tool calls change it, isn't a tool call itself,
+    /// and is noted in the result.
+    #[test]
+    fn environment_reads_show_current_state() {
+        let mut session = Session::new("environment_reads");
+        let read = |session: &mut Session| session.send(json!({ "type": "get_environment" }));
+        assert_eq!(read(&mut session)["type"], "error");
+
+        start_benchmark(&mut session, "run-h", &[]);
+        session.send(json!({
+            "type": "start", "benchmark": "run-h", "suite": "slack", "task": "user_task_0",
+        }));
+        let before = read(&mut session);
+        assert_eq!(before["type"], "environment", "{before}");
+        assert_eq!(before["environment"]["web"]["web_requests"], json!([""]));
+        assert!(before["environment"]["slack"]["channels"].is_array());
+        // Map keys are sorted, so the state's JSON is deterministic.
+        let users: Vec<&String> = before["environment"]["slack"]["user_channels"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect();
+        assert!(users.is_sorted(), "{users:?}");
+
+        session.send(json!({
+            "type": "call_tool", "name": "get_webpage",
+            "arguments": { "url": "www.informations.com" },
+        }));
+        let after = read(&mut session);
+        assert_eq!(
+            after["environment"]["web"]["web_requests"],
+            json!(["", "www.informations.com"])
+        );
+        session.send(json!({ "type": "finish" }));
+
+        let path = session
+            .logdir
+            .join("run-h/slack/user_task_0/none/none.json");
+        let result: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(result["tool_calls"].as_array().unwrap().len(), 1);
+        assert_eq!(result["environment_reads"], json!([0, 1]));
     }
 
     /// An injection alone prompts with the injection's goal and is judged only by it.

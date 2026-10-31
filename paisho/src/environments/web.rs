@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Web {
+    #[serde(serialize_with = "crate::environments::serialize_sorted")]
     pub(crate) web_content: HashMap<String, String>,
     pub(crate) web_requests: Vec<String>,
 }

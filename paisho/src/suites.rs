@@ -170,8 +170,9 @@ pub trait Injection {
     ) -> bool;
 }
 
-/// The starting environment of a suite, into which an attack can place injections.
-pub trait SuiteEnvironment: Environment + Clone {
+/// The starting environment of a suite, into which an attack can place injections. Its
+/// JSON form is the state a client reads with `get_environment`.
+pub trait SuiteEnvironment: Environment + Clone + serde::Serialize {
     /// The names of the tools the agent may use in this suite, in the order they are shown
     /// to it. Each must be a tool the environment provides; [`Recording`] hides the rest.
     const TOOLS: &'static [&'static str];

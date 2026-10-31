@@ -10,7 +10,7 @@ use injections::*;
 use tasks::*;
 
 combine_environments! {
-    #[derive(Clone)]
+    #[derive(Clone, serde::Serialize)]
     pub struct SlackWeb {
         pub slack: Slack,
         pub web: Web,

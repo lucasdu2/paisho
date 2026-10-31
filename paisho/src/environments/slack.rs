@@ -11,18 +11,21 @@ pub(crate) struct Message {
 }
 
 /// An invitation sent by `invite_user_to_slack`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct EmailInvite {
     pub(crate) user: String,
     pub(crate) user_email: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub struct Slack {
     pub(crate) users: Vec<String>,
     pub(crate) channels: Vec<String>,
+    #[serde(serialize_with = "crate::environments::serialize_sorted")]
     pub(crate) user_channels: HashMap<String, Vec<String>>,
+    #[serde(serialize_with = "crate::environments::serialize_sorted")]
     pub(crate) user_inbox: HashMap<String, Vec<Message>>,
+    #[serde(serialize_with = "crate::environments::serialize_sorted")]
     pub(crate) channel_inbox: HashMap<String, Vec<Message>>,
     pub(crate) email_invites: Vec<EmailInvite>,
 }
