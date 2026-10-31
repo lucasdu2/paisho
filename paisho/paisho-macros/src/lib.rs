@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Error, Expr, FnArg, ImplItem, ItemImpl, Lit, Meta, Pat, ReturnType, Type, parse_macro_input,
-    spanned::Spanned,
+    Error, Expr, FnArg, GenericArgument, ImplItem, ItemImpl, Lit, Meta, Pat, PathArguments,
+    ReturnType, Type, parse_macro_input, spanned::Spanned,
 };
 
 /// Turns every method in an `impl` block into a tool callable through `dispatch`.
@@ -44,14 +44,19 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
                 "tools must return Result<T, String>",
             ));
         };
-        let returns_result = matches!(&**ret, Type::Path(p)
-            if p.path.segments.last().is_some_and(|s| s.ident == "Result"));
-        if !returns_result {
+        // `T` in `Result<T, String>`.
+        let Some(ok_ty) = result_ok_type(ret) else {
             return Err(Error::new(
                 ret.span(),
                 "tools must return Result<T, String>",
             ));
-        }
+        };
+        // Tools returning `()` have no structured content, so no output schema.
+        let set_output_schema = if matches!(ok_ty, Type::Tuple(t) if t.elems.is_empty()) {
+            quote! {}
+        } else {
+            quote! { schema["output_schema"] = crate::suites::output_schema::<#ok_ty>(); }
+        };
 
         let description = doc_string(&method.attrs);
 
@@ -128,11 +133,13 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
                 map.remove("$schema");
                 map.remove("title");
             }
-            ::serde_json::json!({
+            let mut schema = ::serde_json::json!({
                 "name": #name_str,
                 "description": #description,
                 "input_schema": input_schema,
-            })
+            });
+            #set_output_schema
+            schema
         }});
         names.push(name_str.clone());
     }
@@ -185,6 +192,22 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
             }
         }
     })
+}
+
+/// The `T` of a `Result<T, E>` type, or `None` if `ty` isn't a `Result`.
+fn result_ok_type(ty: &Type) -> Option<&Type> {
+    let Type::Path(p) = ty else { return None };
+    let last = p.path.segments.last()?;
+    if last.ident != "Result" {
+        return None;
+    }
+    let PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+    match args.args.first()? {
+        GenericArgument::Type(ok_ty) => Some(ok_ty),
+        _ => None,
+    }
 }
 
 /// Joins the `///` doc comment lines on an item into one string.

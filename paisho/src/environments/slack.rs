@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Message {
     pub(crate) sender: String,

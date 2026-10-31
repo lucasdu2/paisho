@@ -370,6 +370,63 @@ mod tests {
         assert_eq!(episode.trace, [download]);
     }
 
+    /// Results are typed by an output schema that names `Message`, and parameters are
+    /// listed in the order the tool declares them.
+    #[test]
+    fn tool_schemas_describe_typed_results() {
+        use serde_json::json;
+
+        use crate::environments::Environment;
+
+        let env = SlackWeb::with_injections(&HashMap::new()).unwrap();
+        let schema = |name| env.tool_schema(name).unwrap();
+
+        let read_inbox = schema("read_inbox");
+        assert_eq!(
+            read_inbox["output_schema"],
+            json!({
+                "type": "object",
+                "properties": {
+                    "result": { "type": "array", "items": { "$ref": "#/$defs/Message" } },
+                },
+                "required": ["result"],
+                "$defs": {
+                    "Message": {
+                        "type": "object",
+                        "properties": {
+                            "sender": { "type": "string" },
+                            "recipient": { "type": "string" },
+                            "body": { "type": "string" },
+                        },
+                        "additionalProperties": false,
+                        "required": ["sender", "recipient", "body"],
+                    },
+                },
+            })
+        );
+        let message_fields: Vec<&String> =
+            read_inbox["output_schema"]["$defs"]["Message"]["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .collect();
+        assert_eq!(message_fields, ["sender", "recipient", "body"]);
+
+        assert_eq!(
+            schema("get_channels")["output_schema"]["properties"]["result"],
+            json!({ "type": "array", "items": { "type": "string" } })
+        );
+
+        let send = schema("send_direct_message");
+        assert!(send.get("output_schema").is_none(), "{send}");
+        let params: Vec<&String> = send["input_schema"]["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect();
+        assert_eq!(params, ["recipient", "body"]);
+    }
+
     #[test]
     fn reference_traces_use_only_the_suites_tools() {
         crate::suites::testing::assert_reference_traces_use_suite_tools::<SlackSuite>();

@@ -319,8 +319,10 @@ pub enum ToolContent {
 
 impl ToolResult {
     /// A successful result: `value` as structured content, mirrored as text for the model.
-    /// A string is mirrored as itself, as the tool returned it; any other value as JSON.
-    /// Tools returning `()` serialize to `null` and get a plain "Success" instead.
+    /// As MCP requires structured content to be an object, it is `{"result": value}`,
+    /// matching [`output_schema`]. A string is mirrored as itself, as the tool returned it;
+    /// any other value as JSON. Tools returning `()` serialize to `null` and get a plain
+    /// "Success" instead.
     pub fn success(value: serde_json::Value) -> Self {
         if value.is_null() {
             return ToolResult {
@@ -341,7 +343,7 @@ impl ToolResult {
         ToolResult {
             result_type: "complete",
             content: vec![ToolContent::Text { text }],
-            structured_content: Some(value),
+            structured_content: Some(serde_json::json!({ "result": value })),
             is_error: false,
         }
     }
@@ -357,6 +359,25 @@ impl ToolResult {
             is_error: true,
         }
     }
+}
+
+/// The JSON Schema of the structured content of a tool returning `T`, like an MCP tool's
+/// `outputSchema`: an object whose `result` property holds the value (see
+/// [`ToolResult::success`]). Named types, such as Slack's `Message`, are defined once under
+/// `$defs` and referenced by name, so a client can map each to a type of its own.
+pub fn output_schema<T: schemars::JsonSchema + ?Sized>() -> serde_json::Value {
+    let mut generator = schemars::SchemaGenerator::default();
+    let result = generator.subschema_for::<T>();
+    let definitions = generator.take_definitions(true);
+    let mut schema = serde_json::json!({
+        "type": "object",
+        "properties": { "result": result },
+        "required": ["result"],
+    });
+    if !definitions.is_empty() {
+        schema["$defs"] = serde_json::Value::Object(definitions);
+    }
+    schema
 }
 
 /// A request that could not be dispatched to any tool (an MCP protocol error).
@@ -455,7 +476,7 @@ mod tests {
         assert_eq!(text(&result), "line one\nline \"two\"");
         assert_eq!(
             result.structured_content,
-            Some(json!("line one\nline \"two\""))
+            Some(json!({ "result": "line one\nline \"two\"" }))
         );
     }
 
@@ -464,7 +485,7 @@ mod tests {
         let value = json!([{ "sender": "Alice", "body": "hi\nthere" }]);
         let result = ToolResult::success(value.clone());
         assert_eq!(text(&result), value.to_string());
-        assert_eq!(result.structured_content, Some(value));
+        assert_eq!(result.structured_content, Some(json!({ "result": value })));
     }
 
     #[test]
