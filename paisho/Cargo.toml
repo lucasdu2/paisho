@@ -8,7 +8,8 @@ interprocess = "2.4.5"
 paisho-macros = { version = "0.1.0", path = "paisho-macros" }
 schemars = "1.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+# `preserve_order` keeps schema properties (tool parameters) in declaration order.
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
 
 [workspace]
 members = ["paisho-macros"]
