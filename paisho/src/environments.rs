@@ -1,4 +1,5 @@
 pub mod calendar;
+pub mod cloud_drive;
 pub mod email;
 pub mod slack;
 pub mod web;
