@@ -363,9 +363,12 @@ impl Inbox {
     }
 }
 
-/// Parses one of `send_email`'s attachments as AgentDojo does: a `"file"` (or anything with
-/// a `"file_id"`) is the ID of a cloud drive file, and anything else is a calendar event
-/// given in `"event_details"`.
+/// Parses one of `send_email`'s attachments: a `"file"` is the ID of a cloud drive file in
+/// `"file_id"`, and an `"event"` is a calendar event in `"event_details"`.
+///
+/// AgentDojo is more lenient: anything with a `"file_id"` is a file whatever its `"type"`,
+/// and any other `"type"` is an event. Here an unknown type is an error, so the agent learns
+/// which types exist.
 fn parse_attachment(attachment: &Value) -> Result<Attachment, String> {
     let Value::Object(attachment) = attachment else {
         return Err("Attachments must be dictionaries.".to_string());
@@ -373,23 +376,32 @@ fn parse_attachment(attachment: &Value) -> Result<Attachment, String> {
     let Some(kind) = attachment.get("type") else {
         return Err("Attachment must have a 'type' field.".to_string());
     };
-    if kind == "file" || attachment.contains_key("file_id") {
-        let Some(file_id) = attachment.get("file_id") else {
-            return Err("Attachment of type 'file' must have a 'file_id' field.".to_string());
-        };
-        // Like Python's `str(file_id)`: a string as is, anything else as its JSON text.
-        let file_id = match file_id {
-            Value::String(file_id) => file_id.clone(),
-            other => other.to_string(),
-        };
-        return Ok(Attachment::File(file_id));
+    match kind.as_str() {
+        Some("file") => {
+            let Some(file_id) = attachment.get("file_id") else {
+                return Err("Attachment of type 'file' must have a 'file_id' field.".to_string());
+            };
+            // Like Python's `str(file_id)`: a string as is, anything else as its JSON text.
+            let file_id = match file_id {
+                Value::String(file_id) => file_id.clone(),
+                other => other.to_string(),
+            };
+            Ok(Attachment::File(file_id))
+        }
+        Some("event") => {
+            let Some(details) = attachment.get("event_details") else {
+                return Err(
+                    "Attachment of type 'event' must have an 'event_details' field.".to_string(),
+                );
+            };
+            serde_json::from_value(details.clone())
+                .map(Attachment::Event)
+                .map_err(|e| format!("Invalid calendar event: {e}"))
+        }
+        _ => Err(format!(
+            "Unknown attachment type {kind}; expected \"file\" or \"event\"."
+        )),
     }
-    let Some(details) = attachment.get("event_details") else {
-        return Err("Attachment of type 'event' must have an 'event_details' field.".to_string());
-    };
-    serde_json::from_value(details.clone())
-        .map(Attachment::Event)
-        .map_err(|e| format!("Invalid calendar event: {e}"))
 }
 
 /// Like Python's `str.title`: the first letter of each run of letters is uppercased and the
@@ -571,6 +583,18 @@ mod tests {
         assert_eq!(
             text(&missing),
             "Attachment of type 'file' must have a 'file_id' field."
+        );
+
+        // AgentDojo would take this as a file because of its `file_id`.
+        let unknown = json!({
+            "recipients": [], "subject": "", "body": "",
+            "attachments": [{ "type": "image", "file_id": "7" }],
+        });
+        let unknown = run(&mut inbox, "send_email", unknown);
+        assert!(unknown.is_error);
+        assert_eq!(
+            text(&unknown),
+            "Unknown attachment type \"image\"; expected \"file\" or \"event\"."
         );
     }
 
