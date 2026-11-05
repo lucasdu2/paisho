@@ -1,11 +1,10 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use paisho_macros::tools;
 
 #[derive(Clone, serde::Serialize)]
 pub struct Web {
-    #[serde(serialize_with = "crate::environments::serialize_sorted")]
-    pub(crate) web_content: HashMap<String, String>,
+    pub(crate) web_content: IndexMap<String, String>,
     pub(crate) web_requests: Vec<String>,
 }
 

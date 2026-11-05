@@ -34,6 +34,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -71,6 +73,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 name = "paisho"
 version = "0.1.0"
 dependencies = [
+ "indexmap",
  "interprocess",
  "paisho-macros",
  "schemars",

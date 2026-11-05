@@ -996,13 +996,13 @@ mod tests {
         assert_eq!(before["type"], "environment", "{before}");
         assert_eq!(before["environment"]["web"]["web_requests"], json!([""]));
         assert!(before["environment"]["slack"]["channels"].is_array());
-        // Map keys are sorted, so the state's JSON is deterministic.
+        // Maps keep insertion order, so the state's JSON is deterministic.
         let users: Vec<&String> = before["environment"]["slack"]["user_channels"]
             .as_object()
             .unwrap()
             .keys()
             .collect();
-        assert!(users.is_sorted(), "{users:?}");
+        assert_eq!(users, ["Alice", "Bob", "Charlie", "Eve"]);
 
         session.send(json!({
             "type": "call_tool", "name": "get_webpage",

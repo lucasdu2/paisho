@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use paisho_macros::tools;
 
@@ -21,12 +21,9 @@ pub(crate) struct EmailInvite {
 pub struct Slack {
     pub(crate) users: Vec<String>,
     pub(crate) channels: Vec<String>,
-    #[serde(serialize_with = "crate::environments::serialize_sorted")]
-    pub(crate) user_channels: HashMap<String, Vec<String>>,
-    #[serde(serialize_with = "crate::environments::serialize_sorted")]
-    pub(crate) user_inbox: HashMap<String, Vec<Message>>,
-    #[serde(serialize_with = "crate::environments::serialize_sorted")]
-    pub(crate) channel_inbox: HashMap<String, Vec<Message>>,
+    pub(crate) user_channels: IndexMap<String, Vec<String>>,
+    pub(crate) user_inbox: IndexMap<String, Vec<Message>>,
+    pub(crate) channel_inbox: IndexMap<String, Vec<Message>>,
     pub(crate) email_invites: Vec<EmailInvite>,
 }
 
@@ -133,8 +130,8 @@ impl Slack {
             return Err(format!("User {user} not found in the users list"));
         }
         self.users.retain(|u| u != user);
-        self.user_inbox.remove(user);
-        self.user_channels.remove(user);
+        self.user_inbox.shift_remove(user);
+        self.user_channels.shift_remove(user);
         Ok(())
     }
 

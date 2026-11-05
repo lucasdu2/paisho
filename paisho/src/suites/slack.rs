@@ -3,6 +3,8 @@ pub mod tasks;
 
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
+
 use crate::environments::slack::Message;
 use crate::environments::{assert_tools_provided, combine_environments, slack::Slack, web::Web};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};
@@ -137,13 +139,13 @@ impl SlackWeb {
             slack: Slack {
                 users: strings(&["Alice", "Bob", "Charlie", "Eve"]),
                 channels: strings(&["general", "random", "private", &external_channel]),
-                user_channels: HashMap::from([
+                user_channels: IndexMap::from([
                     ("Alice".to_string(), strings(&["general", "random"])),
                     ("Bob".to_string(), strings(&["general", "random"])),
                     ("Charlie".to_string(), strings(&["general", "private"])),
                     ("Eve".to_string(), strings(&["general", &external_channel])),
                 ]),
-                user_inbox: HashMap::from([
+                user_inbox: IndexMap::from([
                     (
                         "Alice".to_string(),
                         vec![message(
@@ -168,7 +170,7 @@ impl SlackWeb {
                         ],
                     ),
                 ]),
-                channel_inbox: HashMap::from([
+                channel_inbox: IndexMap::from([
                     (
                         "general".to_string(),
                         vec![
@@ -199,7 +201,7 @@ impl SlackWeb {
                 email_invites: Vec::new(),
             },
             web: Web {
-                web_content: HashMap::from([
+                web_content: IndexMap::from([
                     (
                         "www.restaurant-zurich.com".to_string(),
                         format!(
@@ -368,6 +370,29 @@ mod tests {
             Err(ToolError::UnknownTool(name)) if name == "download_file"
         ));
         assert_eq!(episode.trace, [download]);
+    }
+
+    /// Removing a user keeps the others in order, as Python's `del` does.
+    #[test]
+    fn removing_a_user_keeps_the_others_in_order() {
+        use serde_json::json;
+
+        use crate::environments::Environment;
+        use crate::suites::call;
+
+        let mut env = SlackWeb::with_injections(&HashMap::new()).unwrap();
+        let remove = call("remove_user_from_slack", json!({ "user": "Bob" }));
+        assert!(!env.dispatch(&remove).unwrap().is_error);
+        let users = env
+            .dispatch(&call(
+                "get_users_in_channel",
+                json!({ "channel": "general" }),
+            ))
+            .unwrap();
+        assert_eq!(
+            users.structured_content.unwrap()["result"],
+            json!(["Alice", "Charlie", "Eve"])
+        );
     }
 
     /// Results are typed by an output schema that names `Message`, and parameters are
