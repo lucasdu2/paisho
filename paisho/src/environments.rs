@@ -1,3 +1,5 @@
+pub mod calendar;
+pub mod email;
 pub mod slack;
 pub mod web;
 

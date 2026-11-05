@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde"] }
 indexmap = { version = "2.14.2", features = ["serde"] }
 interprocess = "2.4.5"
 paisho-macros = { version = "0.1.0", path = "paisho-macros" }
-schemars = "1.2.2"
+schemars = { version = "1.2.2", features = ["chrono04"] }
 serde = { version = "1.0.229", features = ["derive"] }
 # `preserve_order` keeps schema properties (tool parameters) in declaration order.
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
