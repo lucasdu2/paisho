@@ -17,6 +17,9 @@ pub fn tools(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
     let self_ty = input.self_ty.clone();
+    // So the tools can be on a type with lifetimes, such as a view borrowing environments.
+    let generics = input.generics.clone();
+    let (impl_generics, _, where_clause) = generics.split_for_impl();
     let Type::Path(self_path) = &*self_ty else {
         return Err(Error::new(self_ty.span(), "#[tools] needs a named type"));
     };
@@ -76,12 +79,18 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
             let field = format_ident!("{}", pat_ident.ident.to_string().trim_start_matches('_'));
 
             // `#[describe = "..."]` on an argument becomes that field's doc comment, which
-            // schemars turns into the property's description. It is stripped from the method.
+            // schemars turns into the property's description, and `#[serde(...)]` and
+            // `#[schemars(...)]` (such as `#[serde(default)]`) move to the field. They are
+            // stripped from the method.
             let mut field_docs = Vec::new();
             pat_ty.attrs.retain(|attr| match &attr.meta {
                 Meta::NameValue(nv) if nv.path.is_ident("describe") => {
                     let value = &nv.value;
                     field_docs.push(quote! { #[doc = #value] });
+                    false
+                }
+                meta if meta.path().is_ident("serde") || meta.path().is_ident("schemars") => {
+                    field_docs.push(quote! { #attr });
                     false
                 }
                 _ => true,
@@ -147,7 +156,7 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
     Ok(quote! {
         #input
         #(#arg_structs)*
-        impl #self_ty {
+        impl #impl_generics #self_ty #where_clause {
             /// Names of every tool, known at compile time.
             pub const TOOL_NAMES: &'static [&'static str] = &[#(#names),*];
 
@@ -175,7 +184,7 @@ fn expand(mut input: ItemImpl) -> syn::Result<proc_macro2::TokenStream> {
             }
         }
 
-        impl crate::environments::Environment for #self_ty {
+        impl #impl_generics crate::environments::Environment for #self_ty #where_clause {
             fn tool_schemas(&self) -> ::std::vec::Vec<::serde_json::Value> {
                 Self::tool_schemas()
             }

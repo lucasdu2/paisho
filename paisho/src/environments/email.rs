@@ -69,7 +69,7 @@ pub(crate) struct Email {
     #[serde(default)]
     pub(crate) read: bool,
     /// The timestamp of the email
-    #[serde(default = "now")]
+    #[serde(default = "crate::environments::now")]
     #[schemars(transform = remove_default)]
     pub(crate) timestamp: NaiveDateTime,
     #[schemars(
@@ -79,11 +79,6 @@ pub(crate) struct Email {
     )]
     #[serde(default)]
     pub(crate) attachments: Vec<Attachment>,
-}
-
-/// The current local time, as AgentDojo's `datetime.datetime.now()`.
-fn now() -> NaiveDateTime {
-    chrono::Local::now().naive_local()
 }
 
 /// Leaves a field's default out of its schema, for a default that changes from call to call
@@ -168,18 +163,6 @@ impl Inbox {
             .collect()
     }
 
-    /// One more than the largest ID, as every ID is an integer.
-    fn next_id(&self) -> Result<String, String> {
-        let mut largest = 0;
-        for key in self.emails.keys() {
-            let id: i64 = key
-                .parse()
-                .map_err(|_| format!("invalid literal for int() with base 10: '{key}'"))?;
-            largest = largest.max(id);
-        }
-        Ok((largest + 1).to_string())
-    }
-
     fn emails_by_status(&self, status: EmailStatus) -> Vec<&Email> {
         self.emails
             .values()
@@ -197,6 +180,34 @@ impl Inbox {
 
     pub(crate) fn drafts(&self) -> Vec<&Email> {
         self.emails_by_status(EmailStatus::Draft)
+    }
+
+    /// Sends an email from the account, as AgentDojo's `Inbox.send_email` method does, and
+    /// returns it. Other environments send email through this, as the calendar does.
+    pub(crate) fn send(
+        &mut self,
+        recipients: Vec<String>,
+        subject: &str,
+        body: &str,
+        attachments: Vec<Attachment>,
+        cc: Vec<String>,
+        bcc: Vec<String>,
+    ) -> Result<Email, String> {
+        let email = Email {
+            id: crate::environments::next_id(self.emails.keys())?,
+            sender: self.account_email.clone(),
+            recipients,
+            cc,
+            bcc,
+            subject: subject.to_string(),
+            body: body.to_string(),
+            status: EmailStatus::Sent,
+            read: true,
+            timestamp: crate::environments::now(),
+            attachments,
+        };
+        self.emails.insert(email.id.clone(), email.clone());
+        Ok(email)
     }
 
     /// The received email with the latest timestamp, or `None` if there are none.
@@ -250,21 +261,14 @@ impl Inbox {
             .iter()
             .map(parse_attachment)
             .collect::<Result<Vec<_>, _>>()?;
-        let email = Email {
-            id: self.next_id()?,
-            sender: self.account_email.clone(),
+        self.send(
             recipients,
-            cc: cc.unwrap_or_default(),
-            bcc: bcc.unwrap_or_default(),
-            subject: subject.to_string(),
-            body: body.to_string(),
-            status: EmailStatus::Sent,
-            read: true,
-            timestamp: now(),
+            subject,
+            body,
             attachments,
-        };
-        self.emails.insert(email.id.clone(), email.clone());
-        Ok(email)
+            cc.unwrap_or_default(),
+            bcc.unwrap_or_default(),
+        )
     }
 
     /// Searches for emails in the inbox that contain the given query in the subject or body.

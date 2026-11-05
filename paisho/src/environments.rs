@@ -31,6 +31,30 @@ pub trait Environment {
 ///     }
 /// }
 /// ```
+///
+/// A tool that needs several fields, such as a calendar tool that also sends email, goes on
+/// a *view*. A view is a struct that:
+///
+/// - has only `&mut` fields, each borrowing a field of the combined struct;
+/// - names each of its fields the same as the field it borrows;
+/// - has a `#[tools]` impl;
+/// - is in scope by its bare name, without a path.
+///
+/// List each view after the fields, with the fields it borrows. A call goes first to the
+/// fields, in order. If none of them has the tool, the view is created by borrowing those
+/// fields, handles the call, and is dropped, so a view exists only during a call.
+///
+/// ```ignore
+/// combine_environments! {
+///     pub struct Workspace {
+///         pub inbox: Inbox,
+///         pub calendar: Calendar,
+///     }
+///     views {
+///         CalendarWithInbox { calendar, inbox },
+///     }
+/// }
+/// ```
 macro_rules! combine_environments {
     (
         $(#[$meta:meta])*
@@ -40,6 +64,11 @@ macro_rules! combine_environments {
                 $field_vis:vis $field:ident : $ty:ty
             ),+ $(,)?
         }
+        $(
+            views {
+                $( $view:ident { $($view_field:ident),+ $(,)? } ),+ $(,)?
+            }
+        )?
     ) => {
         $(#[$meta])*
         $vis struct $name {
@@ -52,8 +81,10 @@ macro_rules! combine_environments {
         impl $name {
             /// Names of every tool, known at compile time.
             pub const TOOL_NAMES: &'static [&'static str] =
-                &$crate::environments::concat_tool_names::<{ 0 $(+ <$ty>::TOOL_NAMES.len())+ }>(
-                    &[$(<$ty>::TOOL_NAMES),+],
+                &$crate::environments::concat_tool_names::<{
+                    0 $(+ <$ty>::TOOL_NAMES.len())+ $($(+ $view::TOOL_NAMES.len())+)?
+                }>(
+                    &[$(<$ty>::TOOL_NAMES),+ $($(, $view::TOOL_NAMES)+)?],
                 );
         }
 
@@ -65,6 +96,9 @@ macro_rules! combine_environments {
                 $(
                     schemas.extend($crate::environments::Environment::tool_schemas(&self.$field));
                 )+
+                $($(
+                    schemas.extend($view::tool_schemas());
+                )+)?
                 schemas
             }
 
@@ -76,6 +110,11 @@ macro_rules! combine_environments {
                         return ::std::option::Option::Some(schema);
                     }
                 )+
+                $($(
+                    if let ::std::option::Option::Some(schema) = $view::tool_schema(name) {
+                        return ::std::option::Option::Some(schema);
+                    }
+                )+)?
                 ::std::option::Option::None
             }
 
@@ -89,12 +128,41 @@ macro_rules! combine_environments {
                         result => return result,
                     }
                 )+
+                $($(
+                    let mut view = $view { $($view_field: &mut self.$view_field),+ };
+                    match $crate::environments::Environment::dispatch(&mut view, call) {
+                        ::std::result::Result::Err($crate::suites::ToolError::UnknownTool(_)) => {}
+                        result => return result,
+                    }
+                )+)?
                 ::std::result::Result::Err($crate::suites::ToolError::UnknownTool(call.name.clone()))
             }
         }
     };
 }
 pub(crate) use combine_environments;
+
+/// The current local time, as AgentDojo's `datetime.datetime.now()`.
+pub(crate) fn now() -> chrono::NaiveDateTime {
+    chrono::Local::now().naive_local()
+}
+
+/// The ID after the largest of `ids`, as AgentDojo gives a new email, event or file: every ID
+/// is an integer, and the first is `"1"`.
+///
+/// # Errors
+///
+/// Fails if an ID isn't an integer.
+pub(crate) fn next_id<'a>(ids: impl IntoIterator<Item = &'a String>) -> Result<String, String> {
+    let mut largest = 0;
+    for id in ids {
+        let id: i64 = id
+            .parse()
+            .map_err(|_| format!("Can't create a new ID: existing ID '{id}' isn't an integer."))?;
+        largest = largest.max(id);
+    }
+    Ok((largest + 1).to_string())
+}
 
 /// Joins lists of tool names into one array of length `N` (the total length of `lists`).
 #[doc(hidden)]
