@@ -396,7 +396,7 @@ mod tests {
     }
 
     /// Results are typed by an output schema that names `Message`, and parameters are
-    /// listed in the order the tool declares them.
+    /// listed in the order the tool declares them, with AgentDojo's descriptions.
     #[test]
     fn tool_schemas_describe_typed_results() {
         use serde_json::json;
@@ -450,6 +450,14 @@ mod tests {
             .keys()
             .collect();
         assert_eq!(params, ["recipient", "body"]);
+        assert_eq!(
+            send["input_schema"]["properties"]["recipient"]["description"],
+            "The recipient of the message."
+        );
+        assert_eq!(
+            schema("get_webpage")["input_schema"]["properties"]["url"]["description"],
+            "The URL of the webpage."
+        );
     }
 
     #[test]
