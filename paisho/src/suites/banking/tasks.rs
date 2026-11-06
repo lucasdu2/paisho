@@ -9,7 +9,7 @@
 use serde_json::json;
 
 use super::Banking;
-use crate::environments::banking::Transaction;
+use crate::environments::bank_account::Transaction;
 use crate::suites::{Task, ToolCall, call};
 
 // -----------------------------------------------------------------------------

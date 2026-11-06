@@ -5,12 +5,11 @@ pub mod tasks;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use chrono::NaiveDate;
 use toml::Table;
 
-use crate::environments::calendar::{Calendar, CalendarEvent, CalendarWithInbox};
+use crate::environments::calendar::{Calendar, CalendarData, CalendarWithInbox};
 use crate::environments::cloud_drive::{CloudDrive, CloudDriveFile};
-use crate::environments::email::{Email, EmailContact, Inbox};
+use crate::environments::email::{Inbox, InboxData};
 use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};
@@ -212,23 +211,6 @@ static DRIVE_DATA: LazyLock<Table> =
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct InboxData {
-    account_email: String,
-    initial_emails: Vec<Email>,
-    #[serde(default)]
-    contact_list: Vec<EmailContact>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CalendarData {
-    account_email: String,
-    current_day: NaiveDate,
-    initial_events: Vec<CalendarEvent>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 struct DriveData {
     account_email: String,
     initial_files: Vec<CloudDriveFile>,
@@ -259,18 +241,12 @@ impl SuiteEnvironment for Workspace {
         let calendar: CalendarData = injected(&CALENDAR_DATA, &texts);
         let drive: DriveData = injected(&DRIVE_DATA, &texts);
         Ok(Workspace {
-            inbox: Inbox::new(
-                inbox.account_email,
-                inbox.initial_emails,
-                inbox.contact_list,
-            )
-            .expect("the workspace's email IDs are unique"),
-            calendar: Calendar::new(
-                calendar.current_day,
-                calendar.account_email,
-                calendar.initial_events,
-            )
-            .expect("the workspace's event IDs are unique"),
+            inbox: inbox
+                .into_inbox()
+                .expect("the workspace's email IDs are unique"),
+            calendar: calendar
+                .into_calendar()
+                .expect("the workspace's event IDs are unique"),
             cloud_drive: CloudDrive::new(drive.initial_files, drive.account_email)
                 .expect("the workspace's file IDs are unique"),
         })
@@ -280,6 +256,8 @@ impl SuiteEnvironment for Workspace {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+
+    use chrono::NaiveDate;
 
     use super::*;
     use crate::environments::Environment;
@@ -361,16 +339,17 @@ mod tests {
         assert!(!format!("{env:?}").contains("_injection}"));
     }
 
-    /// Tables keep the order the data gives, as AgentDojo's dicts do.
+    /// Maps are in key order, as AgentDojo loads them, not the data's order (Emma, then
+    /// David, for this file).
     #[test]
-    fn data_keeps_its_order() {
+    fn maps_are_sorted_by_key() {
         let env = Workspace::with_injections(&HashMap::new()).unwrap();
         let shared: Vec<&String> = env.cloud_drive.files["1"].shared_with.keys().collect();
         assert_eq!(
             shared,
             [
-                "emma.johnson@bluesparrowtech.com",
-                "david.lee@bluesparrowtech.com"
+                "david.lee@bluesparrowtech.com",
+                "emma.johnson@bluesparrowtech.com"
             ]
         );
     }

@@ -55,9 +55,8 @@ impl UserAccount {
     }
 
     /// Update the user information.
-    ///
-    /// Each field given is set. AgentDojo skips empty strings; here they are set like any
-    /// other value.
+    // Each field given is set. AgentDojo skips empty strings; here they are set like any
+    // other value.
     fn update_user_info(
         &mut self,
         #[describe = "First name of the user (optional)"] first_name: Option<String>,

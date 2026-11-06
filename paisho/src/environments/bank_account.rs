@@ -107,9 +107,8 @@ impl BankAccount {
     }
 
     /// Update a scheduled transaction.
-    ///
-    /// Each field given is set. AgentDojo skips falsy values, so there `recurring: false`
-    /// and `amount: 0` do nothing; here they are set like any other value.
+    // Each field given is set. AgentDojo skips falsy values, so there `recurring: false`
+    // and `amount: 0` do nothing; here they are set like any other value.
     fn update_scheduled_transaction(
         &mut self,
         #[describe = "ID of the transaction (mandatory)"] id: u32,

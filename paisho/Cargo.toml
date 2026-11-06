@@ -12,7 +12,7 @@ schemars = { version = "1.2.2", features = ["chrono04", "indexmap2"] }
 serde = { version = "1.0.229", features = ["derive"] }
 # `preserve_order` keeps schema properties (tool parameters) in declaration order.
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
-toml = { version = "1", features = ["preserve_order"] }
+toml = "1"
 
 [workspace]
 members = ["paisho-macros"]

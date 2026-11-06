@@ -91,7 +91,26 @@ fn remove_default(schema: &mut schemars::Schema) {
 }
 
 /// The user's mailbox.
-#[derive(Debug, Clone, serde::Serialize)]
+/// An inbox as a suite's data gives it, before [`Inbox::new`] indexes its emails.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct InboxData {
+    account_email: String,
+    initial_emails: Vec<Email>,
+    #[serde(default)]
+    contact_list: Vec<EmailContact>,
+}
+
+impl InboxData {
+    /// # Errors
+    ///
+    /// Returns an error if two of the emails share an ID.
+    pub(crate) fn into_inbox(self) -> Result<Inbox, String> {
+        Inbox::new(self.account_email, self.initial_emails, self.contact_list)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub(crate) struct Inbox {
     pub(crate) account_email: String,
     pub(crate) initial_emails: Vec<Email>,

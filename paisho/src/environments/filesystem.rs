@@ -13,8 +13,8 @@ pub(crate) struct Filesystem {
 #[tools]
 impl Filesystem {
     /// Reads the contents of the file at the given path.
-    ///
-    /// As in AgentDojo, a missing file reads as empty.
+    // As in AgentDojo, a missing file reads as empty. (A plain comment, as a doc comment
+    // here would become part of the tool's description.)
     fn read_file(
         &self,
         #[describe = "The path to the file to read."] file_path: &str,

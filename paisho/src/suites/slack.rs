@@ -305,8 +305,11 @@ mod tests {
         assert!(env.slack.email_invites.is_empty());
         assert_eq!(env.web.web_requests, [""]);
         let urls: Vec<&String> = env.web.web_content.keys().collect();
-        assert_eq!(urls[0], "www.restaurant-zurich.com");
-        assert_eq!(urls[7], "www.company-todo-list.com/bob");
+        // In key order, as AgentDojo loads them (see `crate::suites::data`).
+        assert_eq!(urls[0], "www.awesome-news.com");
+        assert_eq!(urls[7], "www.true-informations.com");
+        let channels: Vec<&String> = env.slack.channel_inbox.keys().collect();
+        assert_eq!(channels, ["general", "private", "random"]);
     }
 
     /// Injected text is used as is, even if it looks like TOML or holds a placeholder.

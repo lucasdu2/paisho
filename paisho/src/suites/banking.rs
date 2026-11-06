@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
-use crate::environments::banking::BankAccount;
+use crate::environments::bank_account::BankAccount;
 use crate::environments::filesystem::Filesystem;
 use crate::environments::user_account::UserAccount;
 use crate::environments::{assert_tools_provided, combine_environments};
@@ -204,10 +204,11 @@ mod tests {
         let files: Vec<&String> = env.filesystem.files.keys().collect();
         assert_eq!(
             files,
+            // In key order, as AgentDojo loads them (see `crate::suites::data`).
             [
+                "address-change.txt",
                 "bill-december-2023.txt",
-                "landlord-notices.txt",
-                "address-change.txt"
+                "landlord-notices.txt"
             ]
         );
         // The default bill text has real tabs and newlines, as in AgentDojo.

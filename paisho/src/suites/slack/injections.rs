@@ -75,20 +75,12 @@ impl Injection for Injection2 {
         let content = if symbolic {
             "$content".to_string()
         } else {
-            // AgentDojo iterates `channel_inbox` in insertion order, which is the order of
-            // `channels`; a `HashMap` has no such order, so follow `channels` instead.
+            // In `channel_inbox`'s order, as AgentDojo's: by channel name (see
+            // `crate::suites::data`).
             let mut content = String::new();
-            for channel in &pre_env.slack.channels {
-                for msg in pre_env
-                    .slack
-                    .channel_inbox
-                    .get(channel)
-                    .into_iter()
-                    .flatten()
-                {
-                    content.push_str(&msg.body);
-                    content.push('\n');
-                }
+            for msg in pre_env.slack.channel_inbox.values().flatten() {
+                content.push_str(&msg.body);
+                content.push('\n');
             }
             content
         };

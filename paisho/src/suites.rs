@@ -5,6 +5,7 @@ use crate::environments::Environment;
 pub mod banking;
 mod data;
 pub mod slack;
+pub mod travel;
 pub mod workspace;
 
 pub trait Task {

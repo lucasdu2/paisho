@@ -49,7 +49,25 @@ pub(crate) struct CalendarEvent {
 }
 
 /// The user's calendar.
-#[derive(Debug, Clone, serde::Serialize)]
+/// A calendar as a suite's data gives it, before [`Calendar::new`] indexes its events.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CalendarData {
+    account_email: String,
+    current_day: NaiveDate,
+    initial_events: Vec<CalendarEvent>,
+}
+
+impl CalendarData {
+    /// # Errors
+    ///
+    /// Returns an error if two of the events share an ID.
+    pub(crate) fn into_calendar(self) -> Result<Calendar, String> {
+        Calendar::new(self.current_day, self.account_email, self.initial_events)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub(crate) struct Calendar {
     pub(crate) current_day: NaiveDate,
     pub(crate) account_email: String,

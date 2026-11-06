@@ -4,6 +4,11 @@
 //! AgentDojo puts the injections into its YAML text before parsing it, so an injection
 //! containing YAML syntax can break or reshape the data. Here the data is parsed first and the
 //! injections go into its strings, so an injection is always just text.
+//!
+//! AgentDojo also writes its parsed YAML back out with PyYAML's `yaml.dump` before putting in
+//! the injections (`read_suite_file` in `task_suite.py`), which sorts every mapping by key. So
+//! its environments see each mapping, such as Slack's `channel_inbox`, in key order, not the
+//! file's order. [`parse`] sorts tables the same way.
 
 use std::collections::HashMap;
 
@@ -11,14 +16,42 @@ use toml::{Table, Value};
 
 use crate::suites::UnknownInjections;
 
-/// Parses a suite's TOML data. Tables keep the order the file gives, for the environments'
-/// `IndexMap`s, through the `toml` crate's `preserve_order` feature.
+/// Parses a suite's TOML data, with every table sorted by key as AgentDojo's data is (see
+/// the module documentation). The environments' `IndexMap`s keep that order.
 ///
 /// # Panics
 ///
 /// Panics if `text` isn't valid TOML, which each suite's tests check.
 pub(crate) fn parse(text: &str) -> Table {
-    text.parse().expect("the suite's data is valid TOML")
+    let mut table = text.parse().expect("the suite's data is valid TOML");
+    sort_tables(&mut table);
+    table
+}
+
+/// Sorts `table` and every table in it by key, as PyYAML's `yaml.dump` does. Rust compares
+/// strings by their bytes, which for UTF-8 is the code point order Python compares them by.
+///
+/// `toml`'s tables are already sorted unless its `preserve_order` feature is on, but any
+/// crate in the build could turn that feature on, so this doesn't rely on it.
+fn sort_tables(table: &mut Table) {
+    let mut entries: Vec<(String, Value)> = std::mem::take(table).into_iter().collect();
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (key, mut value) in entries {
+        sort_value(&mut value);
+        table.insert(key, value);
+    }
+}
+
+fn sort_value(value: &mut Value) {
+    match value {
+        Value::Table(table) => sort_tables(table),
+        Value::Array(items) => items.iter_mut().for_each(sort_value),
+        Value::String(_)
+        | Value::Integer(_)
+        | Value::Float(_)
+        | Value::Boolean(_)
+        | Value::Datetime(_) => {}
+    }
 }
 
 /// The text for each of a suite's injection IDs: its entry in `injections`, or its default
@@ -144,6 +177,16 @@ pub(crate) fn assert_placeholders_are_the_injection_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tables_are_sorted_by_key_at_every_depth() {
+        let table = parse("b = 1\na = 2\n[[c]]\nz = 1\ny = { q = 1, p = 2 }\n");
+        let keys = |table: &Table| table.keys().cloned().collect::<Vec<_>>();
+        assert_eq!(keys(&table), ["a", "b", "c"]);
+        let item = table["c"][0].as_table().unwrap();
+        assert_eq!(keys(item), ["y", "z"]);
+        assert_eq!(keys(item["y"].as_table().unwrap()), ["p", "q"]);
+    }
 
     #[test]
     fn fill_replaces_known_placeholders_once() {

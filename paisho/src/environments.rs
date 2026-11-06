@@ -1,9 +1,10 @@
-pub mod banking;
+pub mod bank_account;
 pub mod calendar;
 pub mod cloud_drive;
 pub mod email;
 pub mod filesystem;
 pub mod slack;
+pub mod travel_booking;
 pub mod user_account;
 pub mod web;
 
@@ -161,6 +162,16 @@ where
     D: serde::Deserializer<'de>,
 {
     let text = <std::borrow::Cow<str> as serde::Deserialize>::deserialize(deserializer)?;
+    parse_date_time(&text).ok_or_else(|| {
+        serde::de::Error::custom(format!(
+            "invalid date and time '{text}': expected YYYY-MM-DDTHH:MM[:SS]"
+        ))
+    })
+}
+
+/// Parses an ISO 8601 date and time as [`deserialize_date_time`] does: with or without
+/// seconds, and with `T` or a space between the date and the time.
+pub(crate) fn parse_date_time(text: &str) -> Option<chrono::NaiveDateTime> {
     [
         "%Y-%m-%dT%H:%M:%S%.f",
         "%Y-%m-%dT%H:%M",
@@ -168,12 +179,7 @@ where
         "%Y-%m-%d %H:%M",
     ]
     .iter()
-    .find_map(|format| chrono::NaiveDateTime::parse_from_str(&text, format).ok())
-    .ok_or_else(|| {
-        serde::de::Error::custom(format!(
-            "invalid date and time '{text}': expected YYYY-MM-DDTHH:MM[:SS]"
-        ))
-    })
+    .find_map(|format| chrono::NaiveDateTime::parse_from_str(text, format).ok())
 }
 
 /// The ID after the largest of `ids`, as AgentDojo gives a new email, event or file: every ID
