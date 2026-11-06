@@ -358,12 +358,13 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::suites::SuiteEnvironment;
     use crate::suites::testing::run_trace;
 
     /// Checks that running the injection's reference trace from the default environment
     /// satisfies its security predicate (meaning the attack succeeded).
     fn check_reference_trace(task: &dyn Injection<Env = Workspace>) {
-        let pre_env = Workspace::populate_suite_environment(&HashMap::new()).unwrap();
+        let pre_env = Workspace::with_injections(&HashMap::new()).unwrap();
         let trace = task.injection_trace_reference(&pre_env, false);
         let episode = run_trace(&pre_env, &trace);
         assert_eq!(episode.trace, trace);

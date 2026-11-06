@@ -1817,10 +1817,11 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::suites::SuiteEnvironment;
     use crate::suites::testing::run_trace;
 
     fn pre_env() -> Workspace {
-        Workspace::populate_suite_environment(&HashMap::new()).unwrap()
+        Workspace::with_injections(&HashMap::new()).unwrap()
     }
 
     /// Checks that running the task's reference trace from the default environment

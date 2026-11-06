@@ -2,7 +2,8 @@ use indexmap::IndexMap;
 
 use paisho_macros::tools;
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Web {
     pub(crate) web_content: IndexMap<String, String>,
     pub(crate) web_requests: Vec<String>,

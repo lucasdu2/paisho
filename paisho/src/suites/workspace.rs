@@ -6,12 +6,13 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use chrono::NaiveDate;
-use toml::{Table, Value};
+use toml::Table;
 
 use crate::environments::calendar::{Calendar, CalendarEvent, CalendarWithInbox};
 use crate::environments::cloud_drive::{CloudDrive, CloudDriveFile};
 use crate::environments::email::{Email, EmailContact, Inbox};
 use crate::environments::{assert_tools_provided, combine_environments};
+use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};
 use injections::*;
 use tasks::*;
@@ -137,16 +138,6 @@ const INJECTION_DEFAULTS: [(&str, &str); 16] = [
     ("drive_keywords_stuffing_injection", ""),
 ];
 
-impl SuiteEnvironment for Workspace {
-    const TOOLS: &'static [&'static str] = &TOOLS;
-
-    const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)] = &INJECTION_DEFAULTS;
-
-    fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections> {
-        Workspace::populate_suite_environment(injections)
-    }
-}
-
 /// AgentDojo's workspace suite: v1, with the fixes AgentDojo made to its tasks in v1.1.1
 /// and v1.1.2.
 pub struct WorkspaceSuite;
@@ -219,10 +210,6 @@ static CALENDAR_DATA: LazyLock<Table> =
 static DRIVE_DATA: LazyLock<Table> =
     LazyLock::new(|| parse(include_str!("workspace/data/cloud_drive.toml")));
 
-fn parse(text: &str) -> Table {
-    text.parse().expect("the workspace data is valid TOML")
-}
-
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct InboxData {
@@ -247,14 +234,17 @@ struct DriveData {
     initial_files: Vec<CloudDriveFile>,
 }
 
-impl Workspace {
+impl SuiteEnvironment for Workspace {
+    const TOOLS: &'static [&'static str] = &TOOLS;
+
+    const INJECTION_DEFAULTS: &'static [(&'static str, &'static str)] = &INJECTION_DEFAULTS;
+
     /// The workspace suite's starting environment, from AgentDojo's data. Each injection
     /// placeholder, such as `{email_facebook_injection}`, is replaced by its entry in
     /// `injections`, or by the suite's default for IDs that `injections` leaves out.
     ///
-    /// AgentDojo puts the injections into its YAML text before parsing it, so an injection
-    /// containing YAML syntax can break or reshape the data. Here the data is parsed first and
-    /// the injections go into its strings, so an injection is always just text.
+    /// The injections go into the data's strings after it's parsed (see [`crate::suites::data`]),
+    /// so an injection is always just text.
     ///
     /// # Errors
     ///
@@ -263,22 +253,8 @@ impl Workspace {
     /// # Panics
     ///
     /// Panics if the suite's data is invalid, which the tests check.
-    pub fn populate_suite_environment(
-        injections: &HashMap<String, String>,
-    ) -> Result<Self, UnknownInjections> {
-        let mut texts: HashMap<&str, &str> = HashMap::from(INJECTION_DEFAULTS);
-        let mut unknown = Vec::new();
-        for (id, text) in injections {
-            match texts.get_mut(id.as_str()) {
-                Some(slot) => *slot = text.as_str(),
-                None => unknown.push(id.clone()),
-            }
-        }
-        if !unknown.is_empty() {
-            unknown.sort();
-            return Err(UnknownInjections(unknown));
-        }
-
+    fn with_injections(injections: &HashMap<String, String>) -> Result<Self, UnknownInjections> {
+        let texts = injection_texts(&INJECTION_DEFAULTS, injections)?;
         let inbox: InboxData = injected(&INBOX_DATA, &texts);
         let calendar: CalendarData = injected(&CALENDAR_DATA, &texts);
         let drive: DriveData = injected(&DRIVE_DATA, &texts);
@@ -299,78 +275,6 @@ impl Workspace {
                 .expect("the workspace's file IDs are unique"),
         })
     }
-}
-
-/// `data` with every placeholder in its strings filled from `texts`, as a `T`.
-///
-/// The data's dates and times are TOML datetimes, such as `start_time = 2024-05-15T10:00`.
-/// Converting from a [`Value`] hands each one to the struct as a string, as written, which
-/// the environments' date deserializers expect. `toml::from_str` straight into the structs
-/// would hand them over as maps instead and fail.
-fn injected<T: serde::de::DeserializeOwned>(data: &Table, texts: &HashMap<&str, &str>) -> T {
-    let mut data = Value::Table(data.clone());
-    for_each_string(&mut data, &mut |text| *text = fill(text, texts));
-    data.try_into()
-        .expect("the workspace data has the environment's shape")
-}
-
-/// Calls `f` on every string in `value`, including those nested in arrays and tables. Table
-/// keys aren't included.
-fn for_each_string(value: &mut Value, f: &mut impl FnMut(&mut String)) {
-    match value {
-        Value::String(text) => f(text),
-        Value::Array(items) => items.iter_mut().for_each(|item| for_each_string(item, f)),
-        Value::Table(table) => table
-            .iter_mut()
-            .for_each(|(_, item)| for_each_string(item, f)),
-        Value::Integer(_) | Value::Float(_) | Value::Boolean(_) | Value::Datetime(_) => {}
-    }
-}
-
-/// `template` with each `{id}` whose ID is in `texts` replaced by its text. Inserted text is
-/// not searched for placeholders, and other braces are left as they are.
-fn fill(template: &str, texts: &HashMap<&str, &str>) -> String {
-    let mut out = String::with_capacity(template.len());
-    let mut rest = template;
-    while let Some(start) = rest.find('{') {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 1..];
-        match after
-            .find('}')
-            .and_then(|end| Some((end, texts.get(&after[..end])?)))
-        {
-            Some((end, text)) => {
-                out.push_str(text);
-                rest = &after[end + 1..];
-            }
-            None => {
-                out.push('{');
-                rest = after;
-            }
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// The placeholder IDs in the strings of the suite's data.
-#[cfg(test)]
-fn placeholders() -> Vec<String> {
-    let mut out = Vec::new();
-    for data in [&*INBOX_DATA, &*CALENDAR_DATA, &*DRIVE_DATA] {
-        for_each_string(&mut Value::Table(data.clone()), &mut |text| {
-            let mut rest = text.as_str();
-            while let Some(start) = rest.find('{') {
-                let after = &rest[start + 1..];
-                let end = after
-                    .find('}')
-                    .expect("every brace in the data's strings closes");
-                out.push(after[..end].to_string());
-                rest = &after[end + 1..];
-            }
-        });
-    }
-    out
 }
 
 #[cfg(test)]
@@ -432,15 +336,10 @@ mod tests {
     /// ID has a placeholder.
     #[test]
     fn placeholders_are_the_injection_ids() {
-        let found = placeholders();
-        let unique: HashSet<&str> = found.iter().map(String::as_str).collect();
-        assert_eq!(
-            unique.len(),
-            found.len(),
-            "a placeholder appears twice: {found:?}"
+        crate::suites::data::assert_placeholders_are_the_injection_ids(
+            &[&INBOX_DATA, &CALENDAR_DATA, &DRIVE_DATA],
+            &INJECTION_DEFAULTS,
         );
-        let ids: HashSet<&str> = INJECTION_DEFAULTS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(unique, ids);
     }
 
     #[test]
@@ -460,6 +359,20 @@ mod tests {
         assert_eq!(feedback.size, feedback.content.chars().count());
         assert!(feedback.content.contains("4,Great value for the price.\n"));
         assert!(!format!("{env:?}").contains("_injection}"));
+    }
+
+    /// Tables keep the order the data gives, as AgentDojo's dicts do.
+    #[test]
+    fn data_keeps_its_order() {
+        let env = Workspace::with_injections(&HashMap::new()).unwrap();
+        let shared: Vec<&String> = env.cloud_drive.files["1"].shared_with.keys().collect();
+        assert_eq!(
+            shared,
+            [
+                "emma.johnson@bluesparrowtech.com",
+                "david.lee@bluesparrowtech.com"
+            ]
+        );
     }
 
     /// Injected text is used as is, even if it looks like TOML or holds a placeholder.

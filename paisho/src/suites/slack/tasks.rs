@@ -903,12 +903,13 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::suites::SuiteEnvironment;
     use crate::suites::testing::run_trace;
 
     /// Checks that running the task's reference trace from the default environment
     /// satisfies its utility.
     fn check_reference_trace(task: &dyn Task<Env = SlackWeb>) {
-        let pre_env = SlackWeb::populate_suite_environment(&HashMap::new()).unwrap();
+        let pre_env = SlackWeb::with_injections(&HashMap::new()).unwrap();
         let trace = task.task_trace_reference(&pre_env);
         let episode = run_trace(&pre_env, &trace);
         assert_eq!(episode.trace, trace);

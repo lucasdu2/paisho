@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 
 use paisho_macros::tools;
 
-#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Message {
     pub(crate) sender: String,
@@ -11,19 +11,22 @@ pub(crate) struct Message {
 }
 
 /// An invitation sent by `invite_user_to_slack`.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct EmailInvite {
     pub(crate) user: String,
     pub(crate) user_email: String,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Slack {
     pub(crate) users: Vec<String>,
     pub(crate) channels: Vec<String>,
     pub(crate) user_channels: IndexMap<String, Vec<String>>,
     pub(crate) user_inbox: IndexMap<String, Vec<Message>>,
     pub(crate) channel_inbox: IndexMap<String, Vec<Message>>,
+    #[serde(default)]
     pub(crate) email_invites: Vec<EmailInvite>,
 }
 
