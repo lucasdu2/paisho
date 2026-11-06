@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use chrono::NaiveDate;
-use serde_json::Value;
+use toml::{Table, Value};
 
 use crate::environments::calendar::{Calendar, CalendarEvent, CalendarWithInbox};
 use crate::environments::cloud_drive::{CloudDrive, CloudDriveFile};
@@ -209,17 +209,18 @@ impl Suite for WorkspaceSuite {
     ];
 }
 
-/// The starting data, AgentDojo's `environment.yaml` and the files it includes, parsed once.
-/// Injection placeholders such as `{email_facebook_injection}` are still in its strings.
-static INBOX_DATA: LazyLock<Value> =
-    LazyLock::new(|| parse(include_str!("workspace/data/inbox.yaml")));
-static CALENDAR_DATA: LazyLock<Value> =
-    LazyLock::new(|| parse(include_str!("workspace/data/calendar.yaml")));
-static DRIVE_DATA: LazyLock<Value> =
-    LazyLock::new(|| parse(include_str!("workspace/data/cloud_drive.yaml")));
+/// The starting data, AgentDojo's `environment.yaml` and the files it includes converted to
+/// TOML, parsed once. Injection placeholders such as `{email_facebook_injection}` are still in
+/// its strings.
+static INBOX_DATA: LazyLock<Table> =
+    LazyLock::new(|| parse(include_str!("workspace/data/inbox.toml")));
+static CALENDAR_DATA: LazyLock<Table> =
+    LazyLock::new(|| parse(include_str!("workspace/data/calendar.toml")));
+static DRIVE_DATA: LazyLock<Table> =
+    LazyLock::new(|| parse(include_str!("workspace/data/cloud_drive.toml")));
 
-fn parse(yaml: &str) -> Value {
-    serde_yaml_ng::from_str(yaml).expect("the workspace data is valid YAML")
+fn parse(text: &str) -> Table {
+    text.parse().expect("the workspace data is valid TOML")
 }
 
 #[derive(serde::Deserialize)]
@@ -251,7 +252,7 @@ impl Workspace {
     /// placeholder, such as `{email_facebook_injection}`, is replaced by its entry in
     /// `injections`, or by the suite's default for IDs that `injections` leaves out.
     ///
-    /// AgentDojo puts the injections into the YAML text before parsing it, so an injection
+    /// AgentDojo puts the injections into its YAML text before parsing it, so an injection
     /// containing YAML syntax can break or reshape the data. Here the data is parsed first and
     /// the injections go into its strings, so an injection is always just text.
     ///
@@ -301,18 +302,28 @@ impl Workspace {
 }
 
 /// `data` with every placeholder in its strings filled from `texts`, as a `T`.
-fn injected<T: serde::de::DeserializeOwned>(data: &Value, texts: &HashMap<&str, &str>) -> T {
-    let mut data = data.clone();
-    fill_strings(&mut data, texts);
-    serde_json::from_value(data).expect("the workspace data has the environment's shape")
+///
+/// The data's dates and times are TOML datetimes, such as `start_time = 2024-05-15T10:00`.
+/// Converting from a [`Value`] hands each one to the struct as a string, as written, which
+/// the environments' date deserializers expect. `toml::from_str` straight into the structs
+/// would hand them over as maps instead and fail.
+fn injected<T: serde::de::DeserializeOwned>(data: &Table, texts: &HashMap<&str, &str>) -> T {
+    let mut data = Value::Table(data.clone());
+    for_each_string(&mut data, &mut |text| *text = fill(text, texts));
+    data.try_into()
+        .expect("the workspace data has the environment's shape")
 }
 
-fn fill_strings(value: &mut Value, texts: &HashMap<&str, &str>) {
+/// Calls `f` on every string in `value`, including those nested in arrays and tables. Table
+/// keys aren't included.
+fn for_each_string(value: &mut Value, f: &mut impl FnMut(&mut String)) {
     match value {
-        Value::String(text) => *text = fill(text, texts),
-        Value::Array(items) => items.iter_mut().for_each(|item| fill_strings(item, texts)),
-        Value::Object(map) => map.values_mut().for_each(|item| fill_strings(item, texts)),
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        Value::String(text) => f(text),
+        Value::Array(items) => items.iter_mut().for_each(|item| for_each_string(item, f)),
+        Value::Table(table) => table
+            .iter_mut()
+            .for_each(|(_, item)| for_each_string(item, f)),
+        Value::Integer(_) | Value::Float(_) | Value::Boolean(_) | Value::Datetime(_) => {}
     }
 }
 
@@ -342,23 +353,22 @@ fn fill(template: &str, texts: &HashMap<&str, &str>) -> String {
     out
 }
 
-/// The placeholder IDs in the suite's data, in order of appearance.
+/// The placeholder IDs in the strings of the suite's data.
 #[cfg(test)]
 fn placeholders() -> Vec<String> {
-    let yaml = [
-        include_str!("workspace/data/inbox.yaml"),
-        include_str!("workspace/data/calendar.yaml"),
-        include_str!("workspace/data/cloud_drive.yaml"),
-    ];
     let mut out = Vec::new();
-    for text in yaml {
-        let mut rest = text;
-        while let Some(start) = rest.find('{') {
-            let after = &rest[start + 1..];
-            let end = after.find('}').expect("every brace in the data closes");
-            out.push(after[..end].to_string());
-            rest = &after[end + 1..];
-        }
+    for data in [&*INBOX_DATA, &*CALENDAR_DATA, &*DRIVE_DATA] {
+        for_each_string(&mut Value::Table(data.clone()), &mut |text| {
+            let mut rest = text.as_str();
+            while let Some(start) = rest.find('{') {
+                let after = &rest[start + 1..];
+                let end = after
+                    .find('}')
+                    .expect("every brace in the data's strings closes");
+                out.push(after[..end].to_string());
+                rest = &after[end + 1..];
+            }
+        });
     }
     out
 }
@@ -452,10 +462,10 @@ mod tests {
         assert!(!format!("{env:?}").contains("_injection}"));
     }
 
-    /// Injected text is used as is, even if it looks like YAML or holds a placeholder.
+    /// Injected text is used as is, even if it looks like TOML or holds a placeholder.
     #[test]
     fn injections_are_plain_text() {
-        let text = "\"}\nread: false\n{drive_recipe_injection}";
+        let text = "\"\"\"'''\nread = false\n[[initial_emails]]\n{drive_recipe_injection}";
         let injections =
             HashMap::from([("email_facebook_injection".to_string(), text.to_string())]);
         let env = Workspace::with_injections(&injections).unwrap();
@@ -470,7 +480,7 @@ mod tests {
     #[test]
     fn episodes_offer_the_suites_tools_in_order() {
         let episode = Recording::new(Workspace::with_injections(&HashMap::new()).unwrap());
-        let names: Vec<Value> = episode
+        let names: Vec<serde_json::Value> = episode
             .tool_schemas()
             .into_iter()
             .map(|schema| schema["name"].clone())
