@@ -15,6 +15,7 @@ use crate::attacks::{
 };
 use crate::environments::Environment;
 use crate::results::{self, BenchmarkConfig, EpisodeKey, EpisodeResult, ToolCallRecord};
+use crate::suites::banking::BankingSuite;
 use crate::suites::slack::SlackSuite;
 use crate::suites::workspace::WorkspaceSuite;
 use crate::suites::{
@@ -184,7 +185,7 @@ struct InjectionInfo {
 // =============================================================================
 
 /// Every suite the server has. Add a suite here to make it listable and runnable.
-const SUITES: &[&dyn AnySuite] = &[&SlackSuite, &WorkspaceSuite];
+const SUITES: &[&dyn AnySuite] = &[&SlackSuite, &WorkspaceSuite, &BankingSuite];
 
 /// What the server needs from a suite, as a trait object so that [`SUITES`] can list suites
 /// of different types. Every [`Suite`] implements it.
@@ -1292,8 +1293,8 @@ mod tests {
             })
         );
         assert_eq!(
-            respond(json!({ "type": "list_injectable", "suite": "banking" })),
-            json!({ "type": "error", "message": "unknown suite: banking" })
+            respond(json!({ "type": "list_injectable", "suite": "nonexistent" })),
+            json!({ "type": "error", "message": "unknown suite: nonexistent" })
         );
     }
 
@@ -1301,7 +1302,7 @@ mod tests {
     fn lists_suites() {
         assert_eq!(
             respond(json!({ "type": "list_suites" })),
-            json!({ "type": "suites", "suites": ["slack", "workspace"] })
+            json!({ "type": "suites", "suites": ["slack", "workspace", "banking"] })
         );
     }
 
@@ -1329,8 +1330,8 @@ mod tests {
     #[test]
     fn unknown_suite_is_an_error() {
         assert_eq!(
-            respond(json!({ "type": "list_suite_content", "suite": "banking" })),
-            json!({ "type": "error", "message": "unknown suite: banking" })
+            respond(json!({ "type": "list_suite_content", "suite": "nonexistent" })),
+            json!({ "type": "error", "message": "unknown suite: nonexistent" })
         );
     }
 }

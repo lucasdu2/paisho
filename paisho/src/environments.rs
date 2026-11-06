@@ -1,7 +1,10 @@
+pub mod banking;
 pub mod calendar;
 pub mod cloud_drive;
 pub mod email;
+pub mod filesystem;
 pub mod slack;
+pub mod user_account;
 pub mod web;
 
 use crate::suites::{ToolCall, ToolError, ToolResult};
