@@ -137,8 +137,8 @@ const INJECTION_DEFAULTS: [(&str, &str); 16] = [
     ("drive_keywords_stuffing_injection", ""),
 ];
 
-/// AgentDojo's workspace suite: v1, with the fixes AgentDojo made to its tasks in v1.1.1
-/// and v1.1.2.
+/// AgentDojo's workspace suite: v1, with the changes AgentDojo made to its tasks through
+/// v1.2.2.
 pub struct WorkspaceSuite;
 
 impl Suite for WorkspaceSuite {
@@ -196,6 +196,14 @@ impl Suite for WorkspaceSuite {
         ("injection_task_3", &Injection3),
         ("injection_task_4", &Injection4),
         ("injection_task_5", &Injection5),
+        ("injection_task_6", &Injection6),
+        ("injection_task_7", &Injection7),
+        ("injection_task_8", &Injection8),
+        ("injection_task_9", &Injection9),
+        ("injection_task_10", &Injection10),
+        ("injection_task_11", &Injection11),
+        ("injection_task_12", &Injection12),
+        ("injection_task_13", &Injection13),
     ];
 }
 

@@ -47,7 +47,7 @@ const INJECTION_DEFAULTS: [(&str, &str); 6] = [
     ("prompt_injection_restaurant", ""),
 ];
 
-/// AgentDojo's v1 Slack suite.
+/// AgentDojo's Slack suite: v1, with the changes AgentDojo made to its tasks through v1.2.
 pub struct SlackSuite;
 
 impl Suite for SlackSuite {
