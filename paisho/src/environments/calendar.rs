@@ -22,7 +22,7 @@ pub(crate) enum EventStatus {
     Canceled,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub(crate) struct CalendarEvent {
     /// The unique identifier of the event
     pub(crate) id: String,
@@ -31,8 +31,10 @@ pub(crate) struct CalendarEvent {
     /// The description of the event
     pub(crate) description: String,
     /// The start time of the event
+    #[serde(deserialize_with = "crate::environments::deserialize_date_time")]
     pub(crate) start_time: NaiveDateTime,
     /// The end time of the event
+    #[serde(deserialize_with = "crate::environments::deserialize_date_time")]
     pub(crate) end_time: NaiveDateTime,
     /// The location of the event
     pub(crate) location: Option<String>,

@@ -16,6 +16,7 @@ use crate::attacks::{
 use crate::environments::Environment;
 use crate::results::{self, BenchmarkConfig, EpisodeKey, EpisodeResult, ToolCallRecord};
 use crate::suites::slack::SlackSuite;
+use crate::suites::workspace::WorkspaceSuite;
 use crate::suites::{
     Injection, Recording, Suite, SuiteEnvironment, Task, ToolCall, ToolError, ToolResult,
 };
@@ -183,7 +184,7 @@ struct InjectionInfo {
 // =============================================================================
 
 /// Every suite the server has. Add a suite here to make it listable and runnable.
-const SUITES: &[&dyn AnySuite] = &[&SlackSuite];
+const SUITES: &[&dyn AnySuite] = &[&SlackSuite, &WorkspaceSuite];
 
 /// What the server needs from a suite, as a trait object so that [`SUITES`] can list suites
 /// of different types. Every [`Suite`] implements it.
@@ -1300,7 +1301,7 @@ mod tests {
     fn lists_suites() {
         assert_eq!(
             respond(json!({ "type": "list_suites" })),
-            json!({ "type": "suites", "suites": ["slack"] })
+            json!({ "type": "suites", "suites": ["slack", "workspace"] })
         );
     }
 

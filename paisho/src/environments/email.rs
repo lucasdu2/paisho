@@ -37,14 +37,14 @@ pub(crate) struct EmailContact {
 
 /// An email attachment: the ID of a file in the cloud drive, or a calendar event.
 // Untagged, so it is written as AgentDojo writes it: a plain string or an event object.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub(crate) enum Attachment {
     File(String),
     Event(CalendarEvent),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub(crate) struct Email {
     /// The unique identifier of the email
     pub(crate) id: String,
@@ -69,7 +69,10 @@ pub(crate) struct Email {
     #[serde(default)]
     pub(crate) read: bool,
     /// The timestamp of the email
-    #[serde(default = "crate::environments::now")]
+    #[serde(
+        default = "crate::environments::now",
+        deserialize_with = "crate::environments::deserialize_date_time"
+    )]
     #[schemars(transform = remove_default)]
     pub(crate) timestamp: NaiveDateTime,
     #[schemars(
@@ -210,6 +213,23 @@ impl Inbox {
         Ok(email)
     }
 
+    /// Emails whose subject or body contains `query`, ignoring case, only those from
+    /// `sender` if given.
+    pub(crate) fn search(&self, query: &str, sender: Option<&str>) -> Vec<&Email> {
+        let emails = match sender {
+            Some(sender) => self.from_address(sender),
+            None => self.emails.values().collect(),
+        };
+        let query = query.to_lowercase();
+        emails
+            .into_iter()
+            .filter(|email| {
+                email.subject.to_lowercase().contains(&query)
+                    || email.body.to_lowercase().contains(&query)
+            })
+            .collect()
+    }
+
     /// The received email with the latest timestamp, or `None` if there are none.
     pub(crate) fn most_recently_received_email(&self) -> Option<&Email> {
         self.received()
@@ -282,18 +302,7 @@ impl Inbox {
                       Use `search_contacts_by_name` if the email address is unknown."]
         sender: Option<String>,
     ) -> Result<Vec<&Email>, String> {
-        let emails = match &sender {
-            Some(sender) => self.from_address(sender),
-            None => self.emails.values().collect(),
-        };
-        let query = query.to_lowercase();
-        let matches: Vec<&Email> = emails
-            .into_iter()
-            .filter(|email| {
-                email.subject.to_lowercase().contains(&query)
-                    || email.body.to_lowercase().contains(&query)
-            })
-            .collect();
+        let matches = self.search(query, sender.as_deref());
         if matches.is_empty() {
             return Err("No emails found. Try with a different query.".to_string());
         }

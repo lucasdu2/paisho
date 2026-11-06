@@ -13,7 +13,7 @@ pub(crate) enum SharingPermission {
 
 type CloudDriveFileID = String;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub(crate) struct CloudDriveFile {
     /// The unique identifier of the file
     pub(crate) id: CloudDriveFileID,
@@ -24,6 +24,7 @@ pub(crate) struct CloudDriveFile {
     /// The email of the owner of the file
     pub(crate) owner: String,
     /// The last modified timestamp
+    #[serde(deserialize_with = "crate::environments::deserialize_date_time")]
     pub(crate) last_modified: NaiveDateTime,
     /// The object containing emails with their sharing permissions
     #[serde(default)]

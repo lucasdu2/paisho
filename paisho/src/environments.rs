@@ -148,6 +148,31 @@ pub(crate) fn now() -> chrono::NaiveDateTime {
     chrono::Local::now().naive_local()
 }
 
+/// Deserializes an ISO 8601 date and time, with or without seconds (`2024-05-15T10:00` or
+/// `2024-05-15T10:00:00`), as Python's `datetime.fromisoformat` accepts both. A space may
+/// separate the date and the time instead of `T`.
+pub(crate) fn deserialize_date_time<'de, D>(
+    deserializer: D,
+) -> Result<chrono::NaiveDateTime, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let text = <std::borrow::Cow<str> as serde::Deserialize>::deserialize(deserializer)?;
+    [
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%d %H:%M",
+    ]
+    .iter()
+    .find_map(|format| chrono::NaiveDateTime::parse_from_str(&text, format).ok())
+    .ok_or_else(|| {
+        serde::de::Error::custom(format!(
+            "invalid date and time '{text}': expected YYYY-MM-DDTHH:MM[:SS]"
+        ))
+    })
+}
+
 /// The ID after the largest of `ids`, as AgentDojo gives a new email, event or file: every ID
 /// is an integer, and the first is `"1"`.
 ///

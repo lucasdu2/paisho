@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::environments::Environment;
 
 pub mod slack;
+pub mod workspace;
 
 pub trait Task {
     type Env: Environment;
@@ -26,6 +27,21 @@ pub trait Task {
         post_env: &Self::Env,
         trace: &[ToolCall],
     ) -> bool;
+
+    /// Like [`Task::utility`], but a task that should leave the environment unchanged (such
+    /// as one that only asks a question) still succeeds if the environment changed.
+    /// `combine_tasks!` uses this for every task but the last, since the tasks after it are
+    /// expected to change the environment; AgentDojo calls this `strict=False`. Defaults to
+    /// `utility`, for tasks that don't require an unchanged environment.
+    fn utility_allowing_changes(
+        &self,
+        output: &str,
+        pre_env: &Self::Env,
+        post_env: &Self::Env,
+        trace: &[ToolCall],
+    ) -> bool {
+        self.utility(output, pre_env, post_env, trace)
+    }
 }
 
 // =============================================================================
@@ -36,7 +52,8 @@ pub trait Task {
 ///
 /// Each task must be a unit struct (so its name is also its value), and all of them must have
 /// the same `Env`. The prompt lists every task's prompt in order unless `prompt` replaces it.
-/// The utility holds when every task's utility holds.
+/// The utility holds when every task's utility holds, where each task but the last only
+/// needs [`Task::utility_allowing_changes`], as later tasks change the environment.
 ///
 /// ```ignore
 /// combine_tasks! {
@@ -120,8 +137,25 @@ macro_rules! combine_tasks {
                 post_env: &Self::Env,
                 trace: &[$crate::suites::ToolCall],
             ) -> bool {
-                $crate::suites::Task::utility(&$first, output, pre_env, post_env, trace)
-                    $(&& $crate::suites::Task::utility(&$rest, output, pre_env, post_env, trace))*
+                let tasks: &[&dyn $crate::suites::Task<Env = Self::Env>] = &[&$first $(, &$rest)*];
+                let (last, earlier) = tasks.split_last().expect("there is at least one task");
+                earlier
+                    .iter()
+                    .all(|task| task.utility_allowing_changes(output, pre_env, post_env, trace))
+                    && last.utility(output, pre_env, post_env, trace)
+            }
+
+            fn utility_allowing_changes(
+                &self,
+                output: &str,
+                pre_env: &Self::Env,
+                post_env: &Self::Env,
+                trace: &[$crate::suites::ToolCall],
+            ) -> bool {
+                $crate::suites::Task::utility_allowing_changes(&$first, output, pre_env, post_env, trace)
+                    $(&& $crate::suites::Task::utility_allowing_changes(
+                        &$rest, output, pre_env, post_env, trace,
+                    ))*
             }
         }
     };
