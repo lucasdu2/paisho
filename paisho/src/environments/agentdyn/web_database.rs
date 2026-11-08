@@ -10,6 +10,8 @@ use indexmap::IndexMap;
 use paisho_macros::tools;
 use serde_json::Value;
 
+use crate::environments::agentdojo::web::standardize_url;
+
 use crate::environments::agentdojo::calendar::CalendarEvent;
 use crate::environments::agentdojo::email::{Attachment, Email};
 use crate::environments::agentdyn::email_database::EmailDatabase;
@@ -62,12 +64,6 @@ pub(crate) struct WebDatabase {
     pub(crate) web_list: Vec<WebPage>,
     /// Files by ID. A new file's ID is one more than the number of files.
     pub(crate) file_list: IndexMap<String, WebFile>,
-}
-
-/// Strips a leading `https://` and then a leading `http://`.
-pub(crate) fn standardize_url(url: &str) -> &str {
-    let url = url.strip_prefix("https://").unwrap_or(url);
-    url.strip_prefix("http://").unwrap_or(url)
 }
 
 impl WebDatabase {
@@ -649,12 +645,5 @@ mod tests {
             "static_parameters": { "file_id": "1", "speed": "fast" },
         });
         assert!(serde_json::from_value::<WebAction>(extra).is_err());
-    }
-
-    #[test]
-    fn urls_are_standardized() {
-        assert_eq!(standardize_url("https://www.a.com"), "www.a.com");
-        assert_eq!(standardize_url("http://www.a.com"), "www.a.com");
-        assert_eq!(standardize_url("www.a.com"), "www.a.com");
     }
 }

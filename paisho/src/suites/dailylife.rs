@@ -543,7 +543,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             texts(&verified),
-            "Account verified. Sent 600.0 to DE8937040044."
+            "Account verified. Sent 600 to DE8937040044."
         );
         assert_eq!(env.env.bank_database.account_list[0].balance, 1210.0);
         assert_eq!(env.env.bank_database.account_list[1].balance, 1575.0);

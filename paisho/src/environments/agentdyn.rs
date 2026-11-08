@@ -55,15 +55,6 @@ impl OtpGenerator {
     }
 }
 
-/// Formats an amount of money as Python's `str` does a float: `200.0`, `156.9`.
-pub(crate) fn python_float(amount: f64) -> String {
-    if amount.fract() == 0.0 && amount.abs() < 1e16 {
-        format!("{amount:.1}")
-    } else {
-        format!("{amount}")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,12 +69,5 @@ mod tests {
         assert!(first.chars().all(|c| c.is_ascii_digit()));
         assert_ne!(otps.next(), first);
         assert_eq!(OtpGenerator::default().next(), first);
-    }
-
-    #[test]
-    fn amounts_are_formatted_as_python_floats() {
-        assert_eq!(python_float(200.0), "200.0");
-        assert_eq!(python_float(156.9), "156.9");
-        assert_eq!(python_float(1653.1), "1653.1");
     }
 }

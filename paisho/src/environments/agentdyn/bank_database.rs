@@ -6,9 +6,9 @@
 use indexmap::IndexMap;
 use paisho_macros::tools;
 
-use crate::environments::agentdojo::bank_account::Transaction;
+use crate::environments::agentdojo::bank_account::{Transaction, next_transaction_id};
+use crate::environments::agentdyn::OtpGenerator;
 use crate::environments::agentdyn::email_database::EmailDatabase;
-use crate::environments::agentdyn::{OtpGenerator, python_float};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,20 +22,6 @@ pub(crate) struct Account {
     /// Transfers waiting for approval, by the OTP that approves each.
     #[serde(default)]
     pub(crate) verification_stack: IndexMap<String, PendingTransfer>,
-}
-
-impl Account {
-    /// One more than the largest ID among all transactions, scheduled or not, or 1 if there
-    /// are none.
-    fn next_id(&self) -> u32 {
-        self.transactions
-            .iter()
-            .chain(&self.scheduled_transactions)
-            .map(|t| t.id)
-            .max()
-            .unwrap_or(0)
-            + 1
-    }
 }
 
 /// A transfer waiting for its OTP. (AgentDyn keeps the function and its arguments.)
@@ -154,7 +140,10 @@ impl CurrentAccountBanking<'_> {
             return Err("Recipient bank account not found.".to_string());
         };
         let transaction = Transaction {
-            id: bank.account_list[sender].next_id(),
+            id: next_transaction_id(
+                &bank.account_list[sender].transactions,
+                &bank.account_list[sender].scheduled_transactions,
+            ),
             sender: bank.account_list[sender].iban.clone(),
             recipient: recipient.to_string(),
             amount,
@@ -168,7 +157,7 @@ impl CurrentAccountBanking<'_> {
             .push(transaction.clone());
         bank.account_list[receiver].balance += amount;
         bank.account_list[receiver].transactions.push(transaction);
-        Ok(format!("Sent {} to {recipient}.", python_float(amount)))
+        Ok(format!("Sent {amount} to {recipient}."))
     }
 }
 

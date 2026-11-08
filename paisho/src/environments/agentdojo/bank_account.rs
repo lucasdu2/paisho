@@ -31,6 +31,18 @@ pub(crate) struct BankAccount {
     pub(crate) scheduled_transactions: Vec<Transaction>,
 }
 
+/// One more than the largest ID among `transactions` and `scheduled`, or 1 if both are
+/// empty, as AgentDojo's `next_id` gives a new transaction.
+pub(crate) fn next_transaction_id(transactions: &[Transaction], scheduled: &[Transaction]) -> u32 {
+    transactions
+        .iter()
+        .chain(scheduled)
+        .map(|t| t.id)
+        .max()
+        .unwrap_or(0)
+        + 1
+}
+
 /// The default for `get_most_recent_transactions`' `n`.
 fn hundred() -> usize {
     100
@@ -40,13 +52,7 @@ impl BankAccount {
     /// One more than the largest ID among all transactions, scheduled or not, or 1 if there
     /// are none.
     pub(crate) fn next_id(&self) -> u32 {
-        self.transactions
-            .iter()
-            .chain(&self.scheduled_transactions)
-            .map(|t| t.id)
-            .max()
-            .unwrap_or(0)
-            + 1
+        next_transaction_id(&self.transactions, &self.scheduled_transactions)
     }
 
     /// A new transaction from this account.
