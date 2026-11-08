@@ -140,13 +140,8 @@ mod tests {
         use crate::environments::Environment;
         use crate::suites::{Recording, ToolError, call};
 
+        crate::suites::testing::assert_episodes_offer_tools_in_order::<SlackSuite>();
         let mut episode = Recording::new(SlackWeb::with_injections(&HashMap::new()).unwrap());
-        let names: Vec<serde_json::Value> = episode
-            .tool_schemas()
-            .into_iter()
-            .map(|schema| schema["name"].clone())
-            .collect();
-        assert_eq!(names, TOOLS);
 
         assert!(SlackWeb::TOOL_NAMES.contains(&"download_file"));
         assert!(episode.tool_schema("download_file").is_none());

@@ -233,7 +233,7 @@ mod tests {
 
     use super::*;
     use crate::environments::Environment;
-    use crate::suites::{Recording, call};
+    use crate::suites::call;
 
     #[test]
     fn travel_suite_lists_every_declared_task() {
@@ -287,13 +287,7 @@ mod tests {
 
     #[test]
     fn episodes_offer_the_suites_tools_in_order() {
-        let episode = Recording::new(Travel::with_injections(&HashMap::new()).unwrap());
-        let names: Vec<serde_json::Value> = episode
-            .tool_schemas()
-            .into_iter()
-            .map(|schema| schema["name"].clone())
-            .collect();
-        assert_eq!(names, TOOLS);
+        crate::suites::testing::assert_episodes_offer_tools_in_order::<TravelSuite>();
     }
 
     /// Reservations go through `ReservationWithUser`, under the user's phone number, and

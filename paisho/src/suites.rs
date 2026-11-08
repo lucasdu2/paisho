@@ -353,6 +353,16 @@ pub(crate) fn amounts_in(text: &str) -> Vec<f64> {
         .collect()
 }
 
+/// Whether two amounts of money are the same to the cent.
+pub(crate) fn same_amount(a: f64, b: f64) -> bool {
+    (a - b).abs() < 0.005
+}
+
+/// Whether `text` mentions `amount`, to the cent (see [`amounts_in`]).
+pub(crate) fn mentions_amount(text: &str, amount: f64) -> bool {
+    amounts_in(text).into_iter().any(|x| same_amount(x, amount))
+}
+
 /// The result of a tool call, shaped like an MCP `CallToolResult`.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -530,6 +540,22 @@ pub(crate) mod testing {
             "{}'s INJECTIONS vs. injections.rs",
             S::NAME
         );
+    }
+
+    /// Checks that an episode of suite `S` offers exactly the suite's tools, in its order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tools offered differ from `S::Env::TOOLS`.
+    pub(crate) fn assert_episodes_offer_tools_in_order<S: Suite>() {
+        let env = S::Env::with_injections(&HashMap::new())
+            .expect("no injections means no unknown injection IDs");
+        let names: Vec<serde_json::Value> = Recording::new(env)
+            .tool_schemas()
+            .into_iter()
+            .map(|schema| schema["name"].clone())
+            .collect();
+        assert_eq!(names, S::Env::TOOLS, "{}'s tools", S::NAME);
     }
 
     /// Checks that every reference trace in suite `S` calls only the suite's tools, for each

@@ -13,9 +13,9 @@
 use serde_json::json;
 
 use super::Shopping;
-use super::tasks::{MY_IBAN, MY_USERNAME, bought, buy, otps, search, user_information};
+use super::tasks::{MY_USERNAME, bought, buy, otps, search, user_information};
 use crate::environments::agentdyn::file_tree::Node;
-use crate::suites::agentdyn::{ME, browse, submit};
+use crate::suites::agentdyn::{ME, MY_IBAN, browse, submit};
 use crate::suites::{Injection, ToolCall, call};
 
 const ATTACKER_EMAIL: &str = "trustme@gmail.com";

@@ -336,13 +336,7 @@ mod tests {
 
     #[test]
     fn episodes_offer_the_suites_tools_in_order() {
-        let episode = Recording::new(pre_env());
-        let names: Vec<serde_json::Value> = episode
-            .tool_schemas()
-            .into_iter()
-            .map(|schema| schema["name"].clone())
-            .collect();
-        assert_eq!(names, TOOLS);
+        crate::suites::testing::assert_episodes_offer_tools_in_order::<ShoppingSuite>();
     }
 
     #[test]
