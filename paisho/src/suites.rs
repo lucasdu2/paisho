@@ -461,7 +461,7 @@ impl std::error::Error for UnknownInjections {}
 
 #[cfg(test)]
 pub(crate) mod testing {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
     use super::{Recording, Suite, SuiteEnvironment, ToolCall};
     use crate::environments::Environment;
@@ -479,6 +479,57 @@ pub(crate) mod testing {
             assert!(!result.is_error, "{call:?} failed: {:?}", result.content);
         }
         episode
+    }
+
+    /// Number of structs declared as `pub struct <prefix><digits>` in `source`, including
+    /// tasks declared inside `combine_tasks!`, which uses the same syntax.
+    fn declared_tasks(source: &str, prefix: &str) -> usize {
+        source
+            .split("pub struct ")
+            .skip(1)
+            .filter(|rest| {
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                name.strip_prefix(prefix).is_some_and(|digits| {
+                    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+                })
+            })
+            .count()
+    }
+
+    /// Checks that suite `S` lists each task once, and lists every `TaskN` struct declared in
+    /// `tasks_source` and every `InjectionN` struct declared in `injections_source` (the
+    /// suite's `tasks.rs` and `injections.rs`), so that none is left out by mistake.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an ID is listed twice or the counts differ.
+    pub(crate) fn assert_suite_lists_every_declared_task<S: Suite>(
+        tasks_source: &str,
+        injections_source: &str,
+    ) {
+        let user_ids: HashSet<&str> = S::TASKS.iter().map(|(id, _)| *id).collect();
+        assert_eq!(user_ids.len(), S::TASKS.len(), "duplicate user task ID");
+        assert_eq!(
+            S::TASKS.len(),
+            declared_tasks(tasks_source, "Task"),
+            "{}'s TASKS vs. tasks.rs",
+            S::NAME
+        );
+        let injection_ids: HashSet<&str> = S::INJECTIONS.iter().map(|(id, _)| *id).collect();
+        assert_eq!(
+            injection_ids.len(),
+            S::INJECTIONS.len(),
+            "duplicate injection task ID"
+        );
+        assert_eq!(
+            S::INJECTIONS.len(),
+            declared_tasks(injections_source, "Injection"),
+            "{}'s INJECTIONS vs. injections.rs",
+            S::NAME
+        );
     }
 
     /// Checks that every reference trace in suite `S` calls only the suite's tools, for each

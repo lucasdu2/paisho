@@ -263,7 +263,6 @@ impl SuiteEnvironment for Workspace {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use chrono::NaiveDate;
 
@@ -271,50 +270,11 @@ mod tests {
     use crate::environments::Environment;
     use crate::suites::{Recording, call};
 
-    /// Number of structs declared as `pub struct <prefix><digits>` in `source`, including
-    /// tasks declared inside `combine_tasks!`, which uses the same syntax.
-    fn declared_tasks(source: &str, prefix: &str) -> usize {
-        source
-            .split("pub struct ")
-            .skip(1)
-            .filter(|rest| {
-                let name: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                name.strip_prefix(prefix).is_some_and(|digits| {
-                    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
-                })
-            })
-            .count()
-    }
-
     #[test]
     fn workspace_suite_lists_every_declared_task() {
-        let user_ids: HashSet<&str> = WorkspaceSuite::TASKS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(
-            user_ids.len(),
-            WorkspaceSuite::TASKS.len(),
-            "duplicate user task ID"
-        );
-        assert_eq!(
-            WorkspaceSuite::TASKS.len(),
-            declared_tasks(include_str!("workspace/tasks.rs"), "Task"),
-            "WorkspaceSuite::TASKS vs. tasks.rs"
-        );
-        let injection_ids: HashSet<&str> = WorkspaceSuite::INJECTIONS
-            .iter()
-            .map(|(id, _)| *id)
-            .collect();
-        assert_eq!(
-            injection_ids.len(),
-            WorkspaceSuite::INJECTIONS.len(),
-            "duplicate injection task ID"
-        );
-        assert_eq!(
-            WorkspaceSuite::INJECTIONS.len(),
-            declared_tasks(include_str!("workspace/injections.rs"), "Injection"),
-            "WorkspaceSuite::INJECTIONS vs. injections.rs"
+        crate::suites::testing::assert_suite_lists_every_declared_task::<WorkspaceSuite>(
+            include_str!("workspace/tasks.rs"),
+            include_str!("workspace/injections.rs"),
         );
     }
 

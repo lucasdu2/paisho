@@ -120,56 +120,17 @@ impl SuiteEnvironment for SlackWeb {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use super::*;
-
-    /// Number of structs declared as `pub struct <prefix><digits>` in `source`, including
-    /// tasks declared inside `combine_tasks!`, which uses the same syntax.
-    fn declared_tasks(source: &str, prefix: &str) -> usize {
-        source
-            .split("pub struct ")
-            .skip(1)
-            .filter(|rest| {
-                let name: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                name.strip_prefix(prefix).is_some_and(|digits| {
-                    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
-                })
-            })
-            .count()
-    }
 
     /// Fails if `SlackSuite` lists a different number of tasks than `tasks.rs` and
     /// `injections.rs` declare (such as a newly added task left out), or lists an ID twice.
     /// `include_str!` makes Cargo rebuild the test when either file changes.
     #[test]
     fn slack_suite_lists_every_declared_task() {
-        let user_ids: HashSet<&str> = SlackSuite::TASKS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(
-            user_ids.len(),
-            SlackSuite::TASKS.len(),
-            "duplicate user task ID"
-        );
-        assert_eq!(
-            SlackSuite::TASKS.len(),
-            declared_tasks(include_str!("slack/tasks.rs"), "Task"),
-            "SlackSuite::TASKS vs. tasks.rs"
-        );
-
-        let injection_ids: HashSet<&str> =
-            SlackSuite::INJECTIONS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(
-            injection_ids.len(),
-            SlackSuite::INJECTIONS.len(),
-            "duplicate injection task ID"
-        );
-        assert_eq!(
-            SlackSuite::INJECTIONS.len(),
-            declared_tasks(include_str!("slack/injections.rs"), "Injection"),
-            "SlackSuite::INJECTIONS vs. injections.rs"
+        crate::suites::testing::assert_suite_lists_every_declared_task::<SlackSuite>(
+            include_str!("slack/tasks.rs"),
+            include_str!("slack/injections.rs"),
         );
     }
 
