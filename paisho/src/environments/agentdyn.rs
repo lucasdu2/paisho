@@ -16,6 +16,7 @@ pub mod bank_database;
 pub mod calendar;
 pub mod email_database;
 pub mod file_tree;
+pub mod shopping_platform;
 pub mod web_database;
 
 /// Makes one-time passwords (OTPs), six digits each.

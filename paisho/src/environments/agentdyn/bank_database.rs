@@ -50,7 +50,7 @@ pub(crate) const OTP_THRESHOLD: f64 = 500.0;
 /// Who sends the OTP emails, and their subject and text (followed by the OTP).
 pub(crate) const OTP_SENDER: &str = "banking_platform@mail.com";
 pub(crate) const OTP_SUBJECT: &str = "Transaction Approval Request OTP";
-const OTP_BODY: &str = "Here is a transaction approval request. Please use the following OTP to \
+pub(crate) const OTP_BODY: &str = "Here is a transaction approval request. Please use the following OTP to \
                         approve it: ";
 
 impl BankDatabase {
@@ -61,10 +61,113 @@ impl BankDatabase {
             .find(|account| account.iban == iban)
     }
 
-    fn account_index(&self, iban: &str) -> Option<usize> {
+    /// The position of the account with `iban` in [`BankDatabase::account_list`]. Two
+    /// accounts can share an IBAN; this is the first, as AgentDyn finds it.
+    pub(crate) fn account_index(&self, iban: &str) -> Option<usize> {
         self.account_list
             .iter()
             .position(|account| account.iban == iban)
+    }
+
+    /// A new transaction in the history of the account at `index`.
+    fn transaction(
+        &self,
+        index: usize,
+        sender: &str,
+        recipient: &str,
+        amount: f64,
+        subject: &str,
+        date: &str,
+    ) -> Transaction {
+        let account = &self.account_list[index];
+        Transaction {
+            id: next_transaction_id(&account.transactions, &account.scheduled_transactions),
+            sender: sender.to_string(),
+            recipient: recipient.to_string(),
+            amount,
+            subject: subject.to_string(),
+            date: date.to_string(),
+            recurring: false,
+        }
+    }
+
+    /// Moves `amount` from the account at `sender` to the account with IBAN `recipient`,
+    /// recording the transaction in both. The caller checks the balance.
+    pub(crate) fn move_money(
+        &mut self,
+        sender: usize,
+        recipient: &str,
+        amount: f64,
+        subject: &str,
+        date: &str,
+    ) -> Result<String, String> {
+        if amount <= 0.0 {
+            return Err("The amount must be greater than 0.".to_string());
+        }
+        let Some(receiver) = self.account_index(recipient) else {
+            return Err("Recipient bank account not found.".to_string());
+        };
+        let iban = self.account_list[sender].iban.clone();
+        let transaction = self.transaction(sender, &iban, recipient, amount, subject, date);
+        self.account_list[sender].balance -= amount;
+        self.account_list[sender]
+            .transactions
+            .push(transaction.clone());
+        self.account_list[receiver].balance += amount;
+        self.account_list[receiver].transactions.push(transaction);
+        Ok(format!("Sent {amount} to {recipient}."))
+    }
+
+    /// Takes `amount` from the account at `index` and records it as paid to `recipient`, who
+    /// may bank elsewhere, as AgentDyn's shopping `pay_money` does.
+    pub(crate) fn pay_out(
+        &mut self,
+        index: usize,
+        recipient: &str,
+        amount: f64,
+        subject: &str,
+        date: &str,
+    ) -> Result<(), String> {
+        if self.account_list[index].balance < amount {
+            return Err("Insufficient funds.".to_string());
+        }
+        self.debit(index, recipient, amount, subject, date);
+        Ok(())
+    }
+
+    /// Takes `amount` from the account at `index`, however low its balance, and records it
+    /// as paid to `recipient`. Returns the transaction.
+    pub(crate) fn debit(
+        &mut self,
+        index: usize,
+        recipient: &str,
+        amount: f64,
+        subject: &str,
+        date: &str,
+    ) -> Transaction {
+        let iban = self.account_list[index].iban.clone();
+        let transaction = self.transaction(index, &iban, recipient, amount, subject, date);
+        self.account_list[index].balance -= amount;
+        self.account_list[index]
+            .transactions
+            .push(transaction.clone());
+        transaction
+    }
+
+    /// Adds `amount` to the account at `index` and records it as paid by `sender`, who may
+    /// bank elsewhere, as AgentDyn's shopping `receive_money` does.
+    pub(crate) fn pay_in(
+        &mut self,
+        index: usize,
+        sender: &str,
+        amount: f64,
+        subject: &str,
+        date: &str,
+    ) {
+        let iban = self.account_list[index].iban.clone();
+        let transaction = self.transaction(index, sender, &iban, amount, subject, date);
+        self.account_list[index].balance += amount;
+        self.account_list[index].transactions.push(transaction);
     }
 
     fn current_index(&self) -> Result<usize, String> {
@@ -133,31 +236,7 @@ impl CurrentAccountBanking<'_> {
                 OTP_THRESHOLD as u32
             ));
         }
-        if amount <= 0.0 {
-            return Err("The amount must be greater than 0.".to_string());
-        }
-        let Some(receiver) = bank.account_index(recipient) else {
-            return Err("Recipient bank account not found.".to_string());
-        };
-        let transaction = Transaction {
-            id: next_transaction_id(
-                &bank.account_list[sender].transactions,
-                &bank.account_list[sender].scheduled_transactions,
-            ),
-            sender: bank.account_list[sender].iban.clone(),
-            recipient: recipient.to_string(),
-            amount,
-            subject: subject.to_string(),
-            date: date.to_string(),
-            recurring: false,
-        };
-        bank.account_list[sender].balance -= amount;
-        bank.account_list[sender]
-            .transactions
-            .push(transaction.clone());
-        bank.account_list[receiver].balance += amount;
-        bank.account_list[receiver].transactions.push(transaction);
-        Ok(format!("Sent {amount} to {recipient}."))
+        bank.move_money(sender, recipient, amount, subject, date)
     }
 }
 
