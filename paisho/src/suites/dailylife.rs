@@ -6,12 +6,12 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
+use crate::environments::agentdojo::calendar::Calendar;
 use crate::environments::agentdyn::bank_database::{BankDatabase, CurrentAccountBanking};
 use crate::environments::agentdyn::calendar::CalendarWithEmail;
 use crate::environments::agentdyn::email_database::{EmailDatabase, EmailWithAttachments};
 use crate::environments::agentdyn::file_tree::FileTree;
 use crate::environments::agentdyn::web_database::{Downloads, ListFormBrowser, WebDatabase};
-use crate::environments::calendar::Calendar;
 use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};

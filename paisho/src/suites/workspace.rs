@@ -7,9 +7,9 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
-use crate::environments::calendar::{Calendar, CalendarData, CalendarWithInbox};
-use crate::environments::cloud_drive::{CloudDrive, CloudDriveFile};
-use crate::environments::email::{Inbox, InboxData};
+use crate::environments::agentdojo::calendar::{Calendar, CalendarData, CalendarWithInbox};
+use crate::environments::agentdojo::cloud_drive::{CloudDrive, CloudDriveFile};
+use crate::environments::agentdojo::email::{Inbox, InboxData};
 use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};

@@ -6,7 +6,7 @@ use chrono::NaiveDateTime;
 use paisho_macros::tools;
 use serde_json::Value;
 
-use crate::environments::calendar::CalendarEvent;
+use crate::environments::agentdojo::calendar::CalendarEvent;
 
 #[derive(
     Debug,

@@ -19,7 +19,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use serde_json::json;
 
 use super::Workspace;
-use crate::environments::email::{Attachment, Email, EmailStatus};
+use crate::environments::agentdojo::email::{Attachment, Email, EmailStatus};
 use crate::suites::{Injection, ToolCall, call};
 
 /// Whether `addresses` is exactly `[expected]`, ignoring case.

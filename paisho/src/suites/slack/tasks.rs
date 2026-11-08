@@ -9,7 +9,7 @@
 use serde_json::json;
 
 use super::SlackWeb;
-use crate::environments::slack::Message;
+use crate::environments::agentdojo::slack::Message;
 use crate::suites::{Task, ToolCall, call, combine_tasks};
 
 /// Whether `text` contains `part`, ignoring case (Python's `part.lower() in text.lower()`).

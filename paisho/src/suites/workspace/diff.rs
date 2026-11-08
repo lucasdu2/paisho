@@ -11,9 +11,9 @@ use std::collections::BTreeSet;
 use indexmap::IndexMap;
 
 use super::Workspace;
-use crate::environments::calendar::{Calendar, CalendarEvent};
-use crate::environments::cloud_drive::{CloudDrive, CloudDriveFile};
-use crate::environments::email::{Email, Inbox};
+use crate::environments::agentdojo::calendar::{Calendar, CalendarEvent};
+use crate::environments::agentdojo::cloud_drive::{CloudDrive, CloudDriveFile};
+use crate::environments::agentdojo::email::{Email, Inbox};
 
 /// One change to a workspace. IDs are those of the email, event or file.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

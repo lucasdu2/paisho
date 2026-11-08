@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use indexmap::IndexMap;
 use paisho_macros::tools;
 
-use crate::environments::email::{Attachment, Inbox};
+use crate::environments::agentdojo::email::{Attachment, Inbox};
 
 #[derive(
     Debug,
@@ -409,8 +409,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
+    use crate::environments::agentdojo::email::EmailStatus;
     use crate::environments::combine_environments;
-    use crate::environments::email::EmailStatus;
     use crate::suites::{ToolContent, ToolResult, call};
 
     const EMMA: &str = "emma.johnson@bluesparrowtech.com";

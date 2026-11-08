@@ -22,11 +22,11 @@ use chrono::Days;
 use serde_json::json;
 
 use super::DailyLife;
+use crate::environments::agentdojo::calendar::CalendarEvent;
+use crate::environments::agentdojo::email::Attachment;
 use crate::environments::agentdyn::bank_database::Account;
 use crate::environments::agentdyn::calendar::{at, has_event};
 use crate::environments::agentdyn::file_tree::File;
-use crate::environments::calendar::CalendarEvent;
-use crate::environments::email::Attachment;
 use crate::suites::{Task, ToolCall, call};
 
 // -----------------------------------------------------------------------------

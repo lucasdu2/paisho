@@ -6,9 +6,9 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
-use crate::environments::calendar::{Calendar, CalendarData, CalendarWithInbox};
-use crate::environments::email::{Inbox, InboxData};
-use crate::environments::travel_booking::{
+use crate::environments::agentdojo::calendar::{Calendar, CalendarData, CalendarWithInbox};
+use crate::environments::agentdojo::email::{Inbox, InboxData};
+use crate::environments::agentdojo::travel_booking::{
     CarRental, Flights, Hotels, Reservation, ReservationWithUser, Restaurants, User,
 };
 use crate::environments::{assert_tools_provided, combine_environments};

@@ -6,8 +6,8 @@
 use chrono::NaiveDateTime;
 use paisho_macros::tools;
 
+use crate::environments::agentdojo::calendar::{Calendar, CalendarEvent, CalendarWithInbox};
 use crate::environments::agentdyn::email_database::EmailDatabase;
-use crate::environments::calendar::{Calendar, CalendarEvent, CalendarWithInbox};
 
 /// The calendar with the email database whose current inbox it sends from. List it in
 /// `combine_environments!` under `views`, as `CalendarWithEmail { calendar, email_database }`.

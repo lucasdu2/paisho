@@ -6,9 +6,9 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
-use crate::environments::bank_account::BankAccount;
-use crate::environments::filesystem::Filesystem;
-use crate::environments::user_account::UserAccount;
+use crate::environments::agentdojo::bank_account::BankAccount;
+use crate::environments::agentdojo::filesystem::Filesystem;
+use crate::environments::agentdojo::user_account::UserAccount;
 use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};

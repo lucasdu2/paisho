@@ -1,6 +1,6 @@
 //! AgentDyn's local filesystem (`default_suites/v1/tools/file_client.py`): a tree of
 //! directories and files with permissions, unlike AgentDojo's flat
-//! [`crate::environments::filesystem::Filesystem`].
+//! [`crate::environments::agentdojo::filesystem::Filesystem`].
 //!
 //! Paths are `/`-separated and absolute; empty segments are ignored, so `/a//b/` is `/a/b`.
 //! AgentDyn treats an empty segment as a name that is never found.

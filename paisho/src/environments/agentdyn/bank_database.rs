@@ -6,9 +6,9 @@
 use indexmap::IndexMap;
 use paisho_macros::tools;
 
+use crate::environments::agentdojo::bank_account::Transaction;
 use crate::environments::agentdyn::email_database::EmailDatabase;
 use crate::environments::agentdyn::{OtpGenerator, python_float};
-use crate::environments::bank_account::Transaction;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]

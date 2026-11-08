@@ -1,13 +1,5 @@
+pub mod agentdojo;
 pub mod agentdyn;
-pub mod bank_account;
-pub mod calendar;
-pub mod cloud_drive;
-pub mod email;
-pub mod filesystem;
-pub mod slack;
-pub mod travel_booking;
-pub mod user_account;
-pub mod web;
 
 use crate::suites::{ToolCall, ToolError, ToolResult};
 

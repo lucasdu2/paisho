@@ -6,7 +6,8 @@ use std::sync::LazyLock;
 
 use toml::Table;
 
-use crate::environments::{assert_tools_provided, combine_environments, slack::Slack, web::Web};
+use crate::environments::agentdojo::{slack::Slack, web::Web};
+use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};
 use injections::*;

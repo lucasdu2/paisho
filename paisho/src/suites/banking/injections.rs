@@ -14,7 +14,7 @@
 use serde_json::json;
 
 use super::Banking;
-use crate::environments::bank_account::Transaction;
+use crate::environments::agentdojo::bank_account::Transaction;
 use crate::suites::{Injection, ToolCall, call};
 
 const ATTACKER: &str = "US133000000121212121212";

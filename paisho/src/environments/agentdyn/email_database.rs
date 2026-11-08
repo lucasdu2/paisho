@@ -5,9 +5,9 @@
 use paisho_macros::tools;
 use serde_json::Value;
 
+use crate::environments::agentdojo::email::{Attachment, Email, Inbox};
 use crate::environments::agentdyn::file_tree::FileTree;
 use crate::environments::agentdyn::web_database::{AttachmentSpec, WebDatabase};
-use crate::environments::email::{Attachment, Email, Inbox};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -228,7 +228,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::environments::email::EmailStatus;
+    use crate::environments::agentdojo::email::EmailStatus;
 
     fn database() -> EmailDatabase {
         serde_json::from_value(json!({

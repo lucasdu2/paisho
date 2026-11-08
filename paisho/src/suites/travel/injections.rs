@@ -9,8 +9,8 @@
 use serde_json::json;
 
 use super::Travel;
-use crate::environments::email::Email;
-use crate::environments::travel_booking::ReservationType;
+use crate::environments::agentdojo::email::Email;
+use crate::environments::agentdojo::travel_booking::ReservationType;
 use crate::suites::{Injection, ToolCall, call};
 
 const RIVERSIDE: &str = "Riverside View Hotel";

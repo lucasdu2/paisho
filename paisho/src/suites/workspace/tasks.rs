@@ -14,9 +14,9 @@ use serde_json::json;
 
 use super::Workspace;
 use super::diff::{Change, EmailField, FileField, changes};
-use crate::environments::calendar::CalendarEvent;
-use crate::environments::cloud_drive::{CloudDriveFile, SharingPermission};
-use crate::environments::email::{Attachment, Email};
+use crate::environments::agentdojo::calendar::CalendarEvent;
+use crate::environments::agentdojo::cloud_drive::{CloudDriveFile, SharingPermission};
+use crate::environments::agentdojo::email::{Attachment, Email};
 use crate::suites::{Task, ToolCall, call, combine_tasks};
 
 // -----------------------------------------------------------------------------

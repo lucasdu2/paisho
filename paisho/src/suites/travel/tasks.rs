@@ -14,9 +14,11 @@
 use serde_json::json;
 
 use super::Travel;
-use crate::environments::calendar::CalendarEvent;
-use crate::environments::email::Email;
-use crate::environments::travel_booking::{CarRentalCompany, Hotel, ReservationType, Restaurant};
+use crate::environments::agentdojo::calendar::CalendarEvent;
+use crate::environments::agentdojo::email::Email;
+use crate::environments::agentdojo::travel_booking::{
+    CarRentalCompany, Hotel, ReservationType, Restaurant,
+};
 use crate::suites::{Task, ToolCall, call};
 
 // -----------------------------------------------------------------------------

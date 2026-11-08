@@ -10,10 +10,10 @@ use indexmap::IndexMap;
 use paisho_macros::tools;
 use serde_json::Value;
 
+use crate::environments::agentdojo::calendar::CalendarEvent;
+use crate::environments::agentdojo::email::{Attachment, Email};
 use crate::environments::agentdyn::email_database::EmailDatabase;
 use crate::environments::agentdyn::file_tree::{File, FileTree, Node, Permissions};
-use crate::environments::calendar::CalendarEvent;
-use crate::environments::email::{Attachment, Email};
 
 /// A page at a URL.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
