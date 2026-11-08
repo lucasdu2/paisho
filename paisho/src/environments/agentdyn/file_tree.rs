@@ -71,7 +71,8 @@ pub(crate) struct Directory {
 }
 
 impl Directory {
-    fn new() -> Self {
+    /// An empty directory, readable and writable.
+    pub(crate) fn new() -> Self {
         Directory {
             children: IndexMap::new(),
             permissions: Permissions::DIRECTORY,
@@ -165,7 +166,7 @@ impl From<FileTree> for FileTreeData {
 }
 
 /// The names along `path`, leaving out empty ones.
-fn segments(path: &str) -> Vec<&str> {
+pub(crate) fn segments(path: &str) -> Vec<&str> {
     path.split('/').filter(|name| !name.is_empty()).collect()
 }
 
@@ -204,7 +205,7 @@ impl FileTree {
     }
 
     /// The directory reached by following `names` from the root. `path` is for errors.
-    fn directory(&self, names: &[&str], path: &str) -> Result<&Directory, String> {
+    pub(crate) fn directory(&self, names: &[&str], path: &str) -> Result<&Directory, String> {
         let mut directory = &self.root;
         for name in names {
             match directory.children.get(*name) {
@@ -216,7 +217,12 @@ impl FileTree {
         Ok(directory)
     }
 
-    fn directory_mut(&mut self, names: &[&str], path: &str) -> Result<&mut Directory, String> {
+    /// Like [`FileTree::directory`], for changing it.
+    pub(crate) fn directory_mut(
+        &mut self,
+        names: &[&str],
+        path: &str,
+    ) -> Result<&mut Directory, String> {
         let mut directory = &mut self.root;
         for name in names {
             match directory.children.get_mut(*name) {
