@@ -101,6 +101,14 @@ pub(crate) struct InboxData {
     contact_list: Vec<EmailContact>,
 }
 
+impl TryFrom<InboxData> for Inbox {
+    type Error = String;
+
+    fn try_from(data: InboxData) -> Result<Self, String> {
+        data.into_inbox()
+    }
+}
+
 impl InboxData {
     /// # Errors
     ///
@@ -110,7 +118,9 @@ impl InboxData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+/// Deserialized from [`InboxData`], so that a suite's data can hold inboxes directly.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "InboxData")]
 pub(crate) struct Inbox {
     pub(crate) account_email: String,
     pub(crate) initial_emails: Vec<Email>,
@@ -225,6 +235,34 @@ impl Inbox {
             body: body.to_string(),
             status: EmailStatus::Sent,
             read: true,
+            timestamp: crate::environments::now(),
+            attachments,
+        };
+        self.emails.insert(email.id.clone(), email.clone());
+        Ok(email)
+    }
+
+    /// Receives an email from `sender`, addressed to the account, as AgentDyn's
+    /// `DynamicInbox.receive_email` does, and returns it. It is unread.
+    pub(crate) fn receive(
+        &mut self,
+        sender: &str,
+        subject: &str,
+        body: &str,
+        attachments: Vec<Attachment>,
+        cc: Vec<String>,
+        bcc: Vec<String>,
+    ) -> Result<Email, String> {
+        let email = Email {
+            id: crate::environments::next_id(self.emails.keys())?,
+            sender: sender.to_string(),
+            recipients: vec![self.account_email.clone()],
+            cc,
+            bcc,
+            subject: subject.to_string(),
+            body: body.to_string(),
+            status: EmailStatus::Received,
+            read: false,
             timestamp: crate::environments::now(),
             attachments,
         };

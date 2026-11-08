@@ -58,6 +58,14 @@ pub(crate) struct CalendarData {
     initial_events: Vec<CalendarEvent>,
 }
 
+impl TryFrom<CalendarData> for Calendar {
+    type Error = String;
+
+    fn try_from(data: CalendarData) -> Result<Self, String> {
+        data.into_calendar()
+    }
+}
+
 impl CalendarData {
     /// # Errors
     ///
@@ -67,7 +75,9 @@ impl CalendarData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+/// Deserialized from [`CalendarData`], so that a suite's data can hold a calendar directly.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "CalendarData")]
 pub(crate) struct Calendar {
     pub(crate) current_day: NaiveDate,
     pub(crate) account_email: String,
@@ -319,7 +329,7 @@ pub(crate) struct CalendarWithInbox<'a> {
 impl CalendarWithInbox<'_> {
     /// Creates a new calendar event with the given details and adds it to the calendar. It
     /// also sends an email to the participants with the event details.
-    fn create_calendar_event(
+    pub(crate) fn create_calendar_event(
         &mut self,
         #[describe = "The title of the event."] title: &str,
         #[describe = "The start time of the event. Must be in format YYYY-MM-DD HH:MM."]
@@ -364,7 +374,7 @@ impl CalendarWithInbox<'_> {
     /// Cancels the event with the given `event_id`. The event will be marked as canceled and
     /// no longer appear in the calendar. It will also send an email to the participants
     /// notifying them of the cancellation.
-    fn cancel_calendar_event(
+    pub(crate) fn cancel_calendar_event(
         &mut self,
         #[describe = "The ID of the event to cancel."] event_id: &str,
     ) -> Result<String, String> {
@@ -376,7 +386,7 @@ impl CalendarWithInbox<'_> {
 
     /// Reschedules the event with the given `event_id` to the new start and end times. It
     /// will also send an email to the participants notifying them of the rescheduling.
-    fn reschedule_calendar_event(
+    pub(crate) fn reschedule_calendar_event(
         &mut self,
         #[describe = "The ID of the event to reschedule."] event_id: &str,
         #[describe = "The new start time of the event. Must be in format YYYY-MM-DD HH:MM."]

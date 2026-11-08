@@ -143,7 +143,8 @@ fn fill(template: &str, texts: &HashMap<&str, &str>) -> String {
 
 /// Checks that every placeholder in the strings of `data` is an ID in `defaults`, and that
 /// every ID has a placeholder. A placeholder may appear more than once, as the Slack suite's
-/// external channel name does.
+/// external channel name does. Braces around anything but letters, digits and underscores,
+/// such as the JSON in one of the dailylife suite's files, aren't placeholders.
 ///
 /// # Panics
 ///
@@ -161,11 +162,14 @@ pub(crate) fn assert_placeholders_are_the_injection_ids(
             let mut rest = text.as_str();
             while let Some(start) = rest.find('{') {
                 let after = &rest[start + 1..];
-                let end = after
-                    .find('}')
-                    .expect("every brace in the data's strings closes");
-                found.insert(after[..end].to_string());
-                rest = &after[end + 1..];
+                let Some(end) = after.find('}') else { break };
+                let name = &after[..end];
+                if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    found.insert(name.to_string());
+                    rest = &after[end + 1..];
+                } else {
+                    rest = after;
+                }
             }
         });
     }

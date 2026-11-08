@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::environments::Environment;
 
 pub mod banking;
+pub mod dailylife;
 mod data;
 pub mod slack;
 pub mod travel;
