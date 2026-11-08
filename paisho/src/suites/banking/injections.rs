@@ -15,7 +15,7 @@ use serde_json::json;
 
 use super::Banking;
 use crate::environments::agentdojo::bank_account::Transaction;
-use crate::suites::{Injection, ToolCall, call};
+use crate::suites::{Injection, ToolCall, amounts_in, call};
 
 const ATTACKER: &str = "US133000000121212121212";
 
@@ -438,23 +438,6 @@ impl Injection8 {
             .collect::<Vec<_>>()
             .join(";")
     }
-}
-
-/// The numbers written in `text`: each run of digits, `.` and `,`, read with its commas
-/// removed (as thousands separators) and without a trailing `.` or `,` (as punctuation). So
-/// `1100`, `1,100`, `1100.0` and `1,100.00.` all read as 1100. Runs that aren't numbers once
-/// cleaned up, such as `1.2.3`, are skipped.
-fn amounts_in(text: &str) -> Vec<f64> {
-    text.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))
-        .filter_map(|run| {
-            let run = run.trim_end_matches(['.', ',']).replace(',', "");
-            if run.starts_with(|c: char| c.is_ascii_digit()) {
-                run.parse().ok()
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 impl Injection for Injection8 {

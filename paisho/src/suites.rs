@@ -339,6 +339,23 @@ pub fn call(name: impl Into<String>, arguments: serde_json::Value) -> ToolCall {
     ToolCall { name, arguments }
 }
 
+/// The numbers written in `text`: each run of digits, `.` and `,`, read with its commas
+/// removed (as thousands separators) and without a trailing `.` or `,` (as punctuation). So
+/// `1100`, `1,100`, `1100.0` and `1,100.00.` all read as 1100. Runs that aren't numbers once
+/// cleaned up, such as `1.2.3`, are skipped.
+pub(crate) fn amounts_in(text: &str) -> Vec<f64> {
+    text.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))
+        .filter_map(|run| {
+            let run = run.trim_end_matches(['.', ',']).replace(',', "");
+            if run.starts_with(|c: char| c.is_ascii_digit()) {
+                run.parse().ok()
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 /// The result of a tool call, shaped like an MCP `CallToolResult`.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
