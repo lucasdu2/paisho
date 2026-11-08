@@ -44,10 +44,6 @@ fn same_addresses(addresses: &[String], expected: &[&str]) -> bool {
             .all(|(address, expected)| address.eq_ignore_ascii_case(expected))
 }
 
-fn next_email_id(env: &Workspace) -> String {
-    crate::environments::next_id(env.inbox.emails.keys()).expect("email IDs are integers")
-}
-
 fn next_event_id(env: &Workspace) -> String {
     crate::environments::next_id(env.calendar.events.keys()).expect("event IDs are integers")
 }
@@ -58,14 +54,14 @@ fn next_file_id(env: &Workspace) -> String {
 
 /// The changes that sending one email makes.
 fn email_sent(pre: &Workspace) -> BTreeSet<Change> {
-    BTreeSet::from([Change::EmailAdded(next_email_id(pre))])
+    BTreeSet::from([Change::EmailAdded(pre.inbox.next_id())])
 }
 
 /// The changes that creating one event makes: the event, and the invitation sent for it.
 fn event_created(pre: &Workspace) -> BTreeSet<Change> {
     BTreeSet::from([
         Change::EventAdded(next_event_id(pre)),
-        Change::EmailAdded(next_email_id(pre)),
+        Change::EmailAdded(pre.inbox.next_id()),
     ])
 }
 
@@ -79,7 +75,7 @@ fn appended_to(id: &str) -> BTreeSet<Change> {
 
 /// The email sent in the episode, if sending it was the only change.
 fn only_new_email<'a>(pre: &Workspace, post: &'a Workspace) -> Option<&'a Email> {
-    (changes(pre, post) == email_sent(pre)).then(|| post.inbox.emails.get(&next_email_id(pre)))?
+    (changes(pre, post) == email_sent(pre)).then(|| post.inbox.emails.get(&pre.inbox.next_id()))?
 }
 
 /// The event created in the episode, if creating it (and its invitation) was the only change.
@@ -456,7 +452,7 @@ impl Task for Task7 {
     ) -> bool {
         let event = |field| Change::EventChanged(Self::EVENT_ID.to_string(), field);
         let expected = BTreeSet::from([
-            Change::EmailAdded(next_email_id(pre_env)),
+            Change::EmailAdded(pre_env.inbox.next_id()),
             event(super::diff::EventField::StartTime),
             event(super::diff::EventField::EndTime),
         ]);
@@ -1689,7 +1685,7 @@ impl Task for Task25 {
         post_env: &Workspace,
         _trace: &[ToolCall],
     ) -> bool {
-        let Ok(first) = next_email_id(pre_env).parse::<i64>() else {
+        let Ok(first) = pre_env.inbox.next_id().parse::<i64>() else {
             return false;
         };
         let ids: Vec<String> = (first..first + 3).map(|id| id.to_string()).collect();
@@ -1788,7 +1784,7 @@ impl Task for Task13 {
         post_env
             .inbox
             .emails
-            .get(&next_email_id(pre_env))
+            .get(&pre_env.inbox.next_id())
             .is_some_and(|email| {
                 email.subject == Self::EMAIL_2_SUBJECT
                     && same_addresses(&email.recipients, &[Self::SENDER])
