@@ -5,6 +5,7 @@ use crate::environments::Environment;
 pub mod banking;
 pub mod dailylife;
 mod data;
+pub mod shopping;
 pub mod slack;
 pub mod travel;
 pub mod workspace;

@@ -17,6 +17,7 @@ use crate::environments::Environment;
 use crate::results::{self, BenchmarkConfig, EpisodeKey, EpisodeResult, ToolCallRecord};
 use crate::suites::banking::BankingSuite;
 use crate::suites::dailylife::DailyLifeSuite;
+use crate::suites::shopping::ShoppingSuite;
 use crate::suites::slack::SlackSuite;
 use crate::suites::travel::TravelSuite;
 use crate::suites::workspace::WorkspaceSuite;
@@ -193,6 +194,7 @@ const SUITES: &[&dyn AnySuite] = &[
     &BankingSuite,
     &TravelSuite,
     &DailyLifeSuite,
+    &ShoppingSuite,
 ];
 
 /// What the server needs from a suite, as a trait object so that [`SUITES`] can list suites
@@ -1310,7 +1312,7 @@ mod tests {
     fn lists_suites() {
         assert_eq!(
             respond(json!({ "type": "list_suites" })),
-            json!({ "type": "suites", "suites": ["slack", "workspace", "banking", "travel", "dailylife"] })
+            json!({ "type": "suites", "suites": ["slack", "workspace", "banking", "travel", "dailylife", "shopping"] })
         );
     }
 
