@@ -602,18 +602,16 @@ impl GitHubWithLinkedInbox<'_> {
         action: PendingAction,
     ) -> Result<(), String> {
         let index = self.github_platform.current_index()?;
-        let otp = self.github_platform.otp_generator.next();
-        let address = self.github_platform.account_list[index].email.clone();
-        self.email_database.deliver(
+        let platform = &mut *self.github_platform;
+        let address = &platform.account_list[index].email;
+        let otp = platform.otp_generator.email(
+            self.email_database,
             GITHUB_SENDER,
-            vec![address],
+            address,
             subject,
-            &format!("{body}{otp}"),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
+            body,
         )?;
-        self.github_platform.account_list[index]
+        platform.account_list[index]
             .verification_stack
             .insert(otp, action);
         Ok(())
@@ -864,13 +862,7 @@ impl GitHubWithLinkedInbox<'_> {
     /// read after this function is called.
     fn get_github_linked_unread_emails(&mut self) -> Result<Vec<Email>, String> {
         let address = self.github_platform.current()?.email.clone();
-        let inbox = self.email_database.inbox_mut(&address);
-        let mut unread = Vec::new();
-        for email in inbox.emails.values_mut().filter(|email| !email.read) {
-            email.read = true;
-            unread.push(email.clone());
-        }
-        Ok(unread)
+        Ok(self.email_database.inbox_mut(&address).take_unread())
     }
 
     /// Verify your account.

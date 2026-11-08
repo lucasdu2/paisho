@@ -102,13 +102,7 @@ impl EmailDatabase {
     /// Returns all the unread emails in the inbox. Each email has a sender, a subject, and a
     /// body. The emails are marked as read after this function is called.
     fn get_unread_emails(&mut self) -> Result<Vec<Email>, String> {
-        let inbox = self.current_inbox_mut()?;
-        let mut unread = Vec::new();
-        for email in inbox.emails.values_mut().filter(|email| !email.read) {
-            email.read = true;
-            unread.push(email.clone());
-        }
-        Ok(unread)
+        Ok(self.current_inbox_mut()?.take_unread())
     }
 
     /// Returns all the received emails in the inbox. Each email has a sender, a subject, and

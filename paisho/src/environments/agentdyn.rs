@@ -20,6 +20,12 @@ pub mod github_platform;
 pub mod shopping_platform;
 pub mod web_database;
 
+use crate::environments::agentdyn::email_database::EmailDatabase;
+
+/// The date AgentDyn's suites take as today, as their calendars do and as its shopping
+/// platform dates orders and refunds.
+pub(crate) const TODAY: &str = "2024-05-19";
+
 /// Makes one-time passwords (OTPs), six digits each.
 ///
 /// AgentDyn draws OTPs at random. Here they follow from a seed in the environment, so an
@@ -52,7 +58,30 @@ impl OtpGenerator {
         format!("{:06}", z % 1_000_000)
     }
 
-    /// The OTP [`OtpGenerator::next`] will return, without advancing.
+    /// Emails the next OTP from `sender` to `address`, with `subject` and a body of `body`
+    /// followed by the OTP, and returns the OTP.
+    pub(crate) fn email(
+        &mut self,
+        email_database: &mut EmailDatabase,
+        sender: &str,
+        address: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<String, String> {
+        let otp = self.next();
+        email_database.deliver(
+            sender,
+            vec![address.to_string()],
+            subject,
+            &format!("{body}{otp}"),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )?;
+        Ok(otp)
+    }
+
+    /// The OTP [`OtpGenerator::next`] will return without advancing.
     #[cfg(test)]
     pub(crate) fn peek(&self) -> String {
         self.clone().next()

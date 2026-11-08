@@ -210,15 +210,12 @@ impl CurrentAccountBanking<'_> {
                 .current_account
                 .clone()
                 .ok_or("No email account is logged in.")?;
-            let otp = bank.otp_generator.next();
-            self.email_database.deliver(
+            let otp = bank.otp_generator.email(
+                self.email_database,
                 OTP_SENDER,
-                vec![address],
+                &address,
                 OTP_SUBJECT,
-                &format!("{OTP_BODY}{otp}"),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
+                OTP_BODY,
             )?;
             bank.account_list[sender].verification_stack.insert(
                 otp,

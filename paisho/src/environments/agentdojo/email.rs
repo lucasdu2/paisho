@@ -135,7 +135,8 @@ impl Inbox {
     ///
     /// # Errors
     ///
-    /// Returns an error if two of `initial_emails` share an ID.
+    /// Returns an error if two of `initial_emails` share an ID, or if an ID isn't an integer
+    /// (new emails are numbered after the largest).
     pub(crate) fn new(
         account_email: String,
         initial_emails: Vec<Email>,
@@ -152,6 +153,9 @@ impl Inbox {
             return Err(format!(
                 "Email IDs must be unique. Duplicates: {duplicate_ids:?}"
             ));
+        }
+        if let Some(id) = emails.keys().find(|id| id.parse::<i64>().is_err()) {
+            return Err(format!("Email IDs must be integers, but one is '{id}'."));
         }
 
         let mut existing_contacts = HashSet::new();
@@ -226,7 +230,7 @@ impl Inbox {
         bcc: Vec<String>,
     ) -> Result<Email, String> {
         let email = Email {
-            id: crate::environments::next_id(self.emails.keys())?,
+            id: self.next_id(),
             sender: self.account_email.clone(),
             recipients,
             cc,
@@ -254,7 +258,7 @@ impl Inbox {
         bcc: Vec<String>,
     ) -> Result<Email, String> {
         let email = Email {
-            id: crate::environments::next_id(self.emails.keys())?,
+            id: self.next_id(),
             sender: sender.to_string(),
             recipients: vec![self.account_email.clone()],
             cc,
@@ -295,17 +299,30 @@ impl Inbox {
     }
 }
 
-#[tools]
 impl Inbox {
-    /// Returns all the unread emails in the inbox. Each email has a sender, a subject, and a
-    /// body. The emails are marked as read after this function is called.
-    fn get_unread_emails(&mut self) -> Result<Vec<Email>, String> {
+    /// The ID a new email gets, one more than the largest, as AgentDojo numbers them.
+    pub(crate) fn next_id(&self) -> String {
+        crate::environments::next_id(self.emails.keys())
+            .expect("Inbox::new checks that email IDs are integers")
+    }
+
+    /// The unread emails, which are now marked read.
+    pub(crate) fn take_unread(&mut self) -> Vec<Email> {
         let mut unread = Vec::new();
         for email in self.emails.values_mut().filter(|email| !email.read) {
             email.read = true;
             unread.push(email.clone());
         }
-        Ok(unread)
+        unread
+    }
+}
+
+#[tools]
+impl Inbox {
+    /// Returns all the unread emails in the inbox. Each email has a sender, a subject, and a
+    /// body. The emails are marked as read after this function is called.
+    fn get_unread_emails(&mut self) -> Result<Vec<Email>, String> {
+        Ok(self.take_unread())
     }
 
     /// Sends an email with the given `body` to the given `address`. Returns a dictionary with
@@ -586,6 +603,18 @@ mod tests {
         let twice = vec![emails[0].clone(), emails[0].clone()];
         let error = Inbox::new("a@b.com".to_string(), twice, Vec::new()).unwrap_err();
         assert_eq!(error, "Email IDs must be unique. Duplicates: [\"0\"]");
+    }
+
+    #[test]
+    fn ids_must_be_integers() {
+        let mut email = inbox().initial_emails[0].clone();
+        email.id = "first".to_string();
+        let error = Inbox::new("a@b.com".to_string(), vec![email], Vec::new()).unwrap_err();
+        assert_eq!(error, "Email IDs must be integers, but one is 'first'.");
+        let mut inbox = inbox();
+        assert_eq!(inbox.next_id(), inbox.initial_emails.len().to_string());
+        assert!(inbox.take_unread().iter().all(|email| email.read));
+        assert!(inbox.take_unread().is_empty());
     }
 
     #[test]

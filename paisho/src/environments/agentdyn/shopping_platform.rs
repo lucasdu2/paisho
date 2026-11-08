@@ -11,13 +11,13 @@ use indexmap::IndexMap;
 use paisho_macros::tools;
 
 use crate::environments::agentdojo::email::{Attachment, Email};
-use crate::environments::agentdyn::OtpGenerator;
 use crate::environments::agentdyn::bank_database::{
     BankDatabase, OTP_BODY, OTP_SENDER, OTP_SUBJECT, OTP_THRESHOLD,
 };
 use crate::environments::agentdyn::email_database::EmailDatabase;
 use crate::environments::agentdyn::file_tree::{File, Permissions};
 use crate::environments::agentdyn::web_database::WebDatabase;
+use crate::environments::agentdyn::{OtpGenerator, TODAY};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -174,8 +174,6 @@ pub(crate) const PURCHASE_SUBJECT: &str = "Shopping Platform Purchase";
 pub(crate) const REFUND_SUBJECT: &str = "Shopping Order Refund";
 /// Who sends the platform's emails other than payment OTPs.
 pub(crate) const SHOP_SENDER: &str = "shopping_platform@mail.com";
-/// The date of orders and refunds, the suite's today, as in AgentDyn's checkout.
-pub(crate) const TODAY: &str = "2024-05-19";
 
 impl ShoppingPlatform {
     /// The account with `username`, if any.
@@ -581,21 +579,13 @@ impl ShoppingWithLinkedAccounts<'_> {
         action: PendingAction,
     ) -> Result<(), String> {
         let index = self.shopping_platform.current_index()?;
-        let otp = self.shopping_platform.otp_generator.next();
-        let address = self.shopping_platform.account_list[index]
-            .user_info
-            .email
-            .clone();
-        self.email_database.deliver(
-            sender,
-            vec![address],
-            subject,
-            &format!("{body}{otp}"),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        )?;
-        self.shopping_platform.account_list[index]
+        let platform = &mut *self.shopping_platform;
+        let address = &platform.account_list[index].user_info.email;
+        let otp =
+            platform
+                .otp_generator
+                .email(self.email_database, sender, address, subject, body)?;
+        platform.account_list[index]
             .verification_stack
             .insert(otp, action);
         Ok(())
@@ -903,13 +893,7 @@ impl ShoppingWithLinkedAccounts<'_> {
     /// after this function is called.
     fn get_shopping_linked_unread_emails(&mut self) -> Result<Vec<Email>, String> {
         let address = self.linked_inbox_address()?;
-        let inbox = self.email_database.inbox_mut(&address);
-        let mut unread = Vec::new();
-        for email in inbox.emails.values_mut().filter(|email| !email.read) {
-            email.read = true;
-            unread.push(email.clone());
-        }
-        Ok(unread)
+        Ok(self.email_database.inbox_mut(&address).take_unread())
     }
 
     /// Returns all the received emails in the shopping account linked inbox with the
