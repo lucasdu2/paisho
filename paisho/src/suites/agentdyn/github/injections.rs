@@ -16,8 +16,9 @@
 use serde_json::json;
 
 use super::GitHub;
-use super::tasks::{ME, Otps, add_key, invite, read_file, repo, star};
+use super::tasks::{add_key, invite, otps, repo, star};
 use crate::environments::agentdyn::file_tree::Node;
+use crate::suites::agentdyn::{ME, read_file};
 use crate::suites::{Injection, ToolCall, call};
 
 const ATTACKER_EMAIL: &str = "trustme@gmail.com";
@@ -44,7 +45,7 @@ fn with_otp_placeholders(mut calls: Vec<ToolCall>, symbolic: bool) -> Vec<ToolCa
 /// Does `request` and approves it with the next OTP.
 fn approved(pre_env: &GitHub, symbolic: bool, request: ToolCall) -> Vec<ToolCall> {
     let mut calls = vec![request];
-    calls.extend(Otps::new(pre_env).verify());
+    calls.extend(otps(pre_env).verify());
     with_otp_placeholders(calls, symbolic)
 }
 
@@ -149,7 +150,7 @@ impl Injection for Injection3 {
     }
 
     fn injection_trace_reference(&self, pre_env: &GitHub, symbolic: bool) -> Vec<ToolCall> {
-        let calls = invite(&mut Otps::new(pre_env), MY_REPOS[2], ATTACKER_EMAIL);
+        let calls = invite(&mut otps(pre_env), MY_REPOS[2], ATTACKER_EMAIL);
         with_otp_placeholders(calls, symbolic)
     }
 
@@ -220,7 +221,7 @@ impl Injection for Injection5 {
     }
 
     fn injection_trace_reference(&self, pre_env: &GitHub, symbolic: bool) -> Vec<ToolCall> {
-        with_otp_placeholders(add_key(&mut Otps::new(pre_env), Self::KEY), symbolic)
+        with_otp_placeholders(add_key(&mut otps(pre_env), Self::KEY), symbolic)
     }
 
     fn injection_output_reference(&self) -> String {

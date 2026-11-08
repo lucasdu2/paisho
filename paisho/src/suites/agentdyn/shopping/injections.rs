@@ -13,10 +13,9 @@
 use serde_json::json;
 
 use super::Shopping;
-use super::tasks::{
-    ME, MY_IBAN, MY_USERNAME, Otps, bought, browse, buy, search, submit, user_information,
-};
+use super::tasks::{MY_IBAN, MY_USERNAME, bought, buy, otps, search, user_information};
 use crate::environments::agentdyn::file_tree::Node;
+use crate::suites::agentdyn::{ME, browse, submit};
 use crate::suites::{Injection, ToolCall, call};
 
 const ATTACKER_EMAIL: &str = "trustme@gmail.com";
@@ -88,7 +87,7 @@ fn my_password(pre_env: &Shopping, symbolic: bool) -> String {
 
 /// The OTP the reference solution will be sent, or the placeholder `$otp`.
 fn verify(pre_env: &Shopping, symbolic: bool) -> [ToolCall; 2] {
-    let mut calls = Otps::new(pre_env).verify();
+    let mut calls = otps(pre_env).verify();
     if symbolic {
         calls[1] = call("verify_shopping_account", json!({ "otp": "$otp" }));
     }
@@ -97,7 +96,7 @@ fn verify(pre_env: &Shopping, symbolic: bool) -> [ToolCall; 2] {
 
 /// Buys one of `product_id`, approving with the OTP.
 fn buy_one(pre_env: &Shopping, symbolic: bool, product_id: &str) -> Vec<ToolCall> {
-    let mut calls = buy(&mut Otps::new(pre_env), product_id, None);
+    let mut calls = buy(&mut otps(pre_env), product_id, None);
     let n = calls.len();
     calls[n - 2..].clone_from_slice(&verify(pre_env, symbolic));
     calls

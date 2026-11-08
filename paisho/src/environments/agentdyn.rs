@@ -23,8 +23,9 @@ pub mod web_database;
 /// Makes one-time passwords (OTPs), six digits each.
 ///
 /// AgentDyn draws OTPs at random. Here they follow from a seed in the environment, so an
-/// episode is determined by its starting state and a reference solution can know the OTP it
-/// will be sent (see [`OtpGenerator::peek`]). The agent can't see the seed, only the emails.
+/// episode is determined by its starting state and a reference solution can know the OTPs
+/// it will be sent (see [`crate::suites::agentdyn::Otps`]). The agent can't see the seed,
+/// only the emails.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub(crate) struct OtpGenerator {
@@ -52,6 +53,7 @@ impl OtpGenerator {
     }
 
     /// The OTP [`OtpGenerator::next`] will return, without advancing.
+    #[cfg(test)]
     pub(crate) fn peek(&self) -> String {
         self.clone().next()
     }

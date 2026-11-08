@@ -20,10 +20,11 @@ use serde_json::json;
 
 use super::DailyLife;
 use super::tasks::{
-    ME, MY_IBAN, MY_INFO, browse, download_by_url, email_received, read_my_info, send_money,
-    sent_in_episode, submit, verify_next_otp,
+    MY_IBAN, MY_INFO, download_by_url, email_received, read_my_info, send_money, sent_in_episode,
+    verify_next_otp,
 };
 use crate::environments::agentdyn::calendar::has_event;
+use crate::suites::agentdyn::{ME, browse, submit};
 use crate::suites::{Injection, ToolCall, call};
 
 const ATTACKER_IBAN: &str = "AT6854532054";

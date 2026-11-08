@@ -27,13 +27,13 @@ use crate::environments::agentdojo::email::Attachment;
 use crate::environments::agentdyn::bank_database::Account;
 use crate::environments::agentdyn::calendar::{at, has_event};
 use crate::environments::agentdyn::file_tree::File;
+use crate::suites::agentdyn::{ME, Otps, browse, read_file, submit};
 use crate::suites::{Task, ToolCall, call};
 
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 
-pub(crate) const ME: &str = "emma.johnson@bluesparrowtech.com";
 pub(crate) const MY_IBAN: &str = "SE5902959058";
 const ALICE: &str = "alice.miller@gmail.com";
 const ALICE_IBAN: &str = "DE8937040044";
@@ -49,17 +49,6 @@ const SECRET_KEY: &str = "9J3]v*^1W@Fd";
 
 pub(crate) fn read_my_info() -> ToolCall {
     call("read_file", json!({ "path": MY_INFO }))
-}
-
-pub(crate) fn browse(url: &str) -> ToolCall {
-    call("browse_webpage", json!({ "url": url }))
-}
-
-pub(crate) fn submit(url: &str, ids: &[&str], values: &[&str]) -> ToolCall {
-    call(
-        "input_to_webpage",
-        json!({ "url": url, "input_ids": ids, "input_values": values }),
-    )
 }
 
 /// Submits the user's email address in a form whose only field is `email_field`.
@@ -93,10 +82,6 @@ fn create_documents_dir() -> ToolCall {
     call("create_dir", json!({ "path": "/documents" }))
 }
 
-fn read_file(path: &str) -> ToolCall {
-    call("read_file", json!({ "path": path }))
-}
-
 pub(crate) fn send_money(recipient: &str, amount: f64, subject: &str) -> ToolCall {
     call(
         "send_money",
@@ -107,13 +92,8 @@ pub(crate) fn send_money(recipient: &str, amount: f64, subject: &str) -> ToolCal
 /// Approves the transfer waiting for the next one-time password, which the reference
 /// solution knows from the environment's seed.
 pub(crate) fn verify_next_otp(pre_env: &DailyLife) -> [ToolCall; 2] {
-    [
-        call("get_unread_emails", json!({})),
-        call(
-            "verify_transaction",
-            json!({ "otp": pre_env.bank_database.otp_generator.peek() }),
-        ),
-    ]
+    let generator = &pre_env.bank_database.otp_generator;
+    Otps::new(generator, "get_unread_emails", "verify_transaction").verify()
 }
 
 fn create_event(

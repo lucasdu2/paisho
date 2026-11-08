@@ -266,29 +266,12 @@ impl SuiteEnvironment for DailyLife {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use super::*;
     use crate::environments::Environment;
     use crate::environments::agentdyn::file_tree::Node;
-    use crate::suites::{Recording, ToolContent, call};
-
-    /// Number of structs declared as `pub struct <prefix><digits>` in `source`.
-    fn declared_tasks(source: &str, prefix: &str) -> usize {
-        source
-            .split("pub struct ")
-            .skip(1)
-            .filter(|rest| {
-                let name: String = rest
-                    .chars()
-                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                    .collect();
-                name.strip_prefix(prefix).is_some_and(|digits| {
-                    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
-                })
-            })
-            .count()
-    }
+    use crate::suites::agentdyn::testing::texts;
+    use crate::suites::{Recording, call};
 
     fn pre_env() -> DailyLife {
         DailyLife::with_injections(&HashMap::new()).unwrap()
@@ -296,30 +279,9 @@ mod tests {
 
     #[test]
     fn dailylife_suite_lists_every_declared_task() {
-        let user_ids: HashSet<&str> = DailyLifeSuite::TASKS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(
-            user_ids.len(),
-            DailyLifeSuite::TASKS.len(),
-            "duplicate user task ID"
-        );
-        assert_eq!(
-            DailyLifeSuite::TASKS.len(),
-            declared_tasks(include_str!("dailylife/tasks.rs"), "Task"),
-            "DailyLifeSuite::TASKS vs. tasks.rs"
-        );
-        let injection_ids: HashSet<&str> = DailyLifeSuite::INJECTIONS
-            .iter()
-            .map(|(id, _)| *id)
-            .collect();
-        assert_eq!(
-            injection_ids.len(),
-            DailyLifeSuite::INJECTIONS.len(),
-            "duplicate injection task ID"
-        );
-        assert_eq!(
-            DailyLifeSuite::INJECTIONS.len(),
-            declared_tasks(include_str!("dailylife/injections.rs"), "Injection"),
-            "DailyLifeSuite::INJECTIONS vs. injections.rs"
+        crate::suites::testing::assert_suite_lists_every_declared_task::<DailyLifeSuite>(
+            include_str!("dailylife/tasks.rs"),
+            include_str!("dailylife/injections.rs"),
         );
     }
 
@@ -418,92 +380,18 @@ mod tests {
     }
 
     #[test]
-    fn reference_traces_use_only_the_suites_tools() {
-        crate::suites::testing::assert_reference_traces_use_suite_tools::<DailyLifeSuite>();
-    }
-
-    fn texts(result: &crate::suites::ToolResult) -> String {
-        result
-            .content
-            .iter()
-            .map(|ToolContent::Text { text }| text.as_str())
-            .collect()
-    }
-
-    /// Runs `trace` from `pre_env`, failing on the first call that errors.
-    fn replay(
-        id: &str,
-        pre_env: &DailyLife,
-        trace: &[crate::suites::ToolCall],
-    ) -> Recording<DailyLife> {
-        let mut episode = Recording::new(pre_env.clone());
-        for call in trace {
-            let result = episode.dispatch(call).unwrap();
-            assert!(
-                !result.is_error,
-                "{id}: {} failed: {}",
-                call.name,
-                texts(&result)
-            );
-        }
-        episode
-    }
-
-    /// Every user task's reference solution runs without errors and succeeds, attacked or
-    /// not; so does every injection task's, and its symbolic trace differs only by
-    /// placeholders.
-    #[test]
     fn reference_solutions_succeed() {
-        let attacked: HashMap<String, String> = INJECTION_DEFAULTS
-            .iter()
-            .map(|(id, _)| (id.to_string(), format!("<INJECTION {id}>")))
-            .collect();
-        for injections in [HashMap::new(), attacked] {
-            let pre_env = DailyLife::with_injections(&injections).unwrap();
-            for (id, task) in DailyLifeSuite::TASKS {
-                let trace = task.task_trace_reference(&pre_env);
-                let episode = replay(id, &pre_env, &trace);
-                let output = task.task_output_reference();
-                assert!(
-                    task.utility(&output, &pre_env, &episode.env, &episode.trace),
-                    "{id} fails its own reference solution"
-                );
-            }
-            for (id, injection) in DailyLifeSuite::INJECTIONS {
-                let trace = injection.injection_trace_reference(&pre_env, false);
-                let episode = replay(id, &pre_env, &trace);
-                let output = injection.injection_output_reference();
-                assert!(
-                    injection.security(&output, &pre_env, &episode.env, &episode.trace),
-                    "{id} fails its own reference solution"
-                );
-                let symbolic = injection.injection_trace_reference(&pre_env, true);
-                assert_eq!(symbolic.len(), trace.len(), "{id}");
-                for (concrete, symbolic) in trace.iter().zip(&symbolic) {
-                    assert_eq!(concrete.name, symbolic.name, "{id}");
-                    for (key, value) in &symbolic.arguments {
-                        if concrete.arguments.get(key) != Some(value) {
-                            assert!(
-                                value.as_str().is_some_and(|v| v.starts_with('$')),
-                                "{id}: {key} differs but isn't a placeholder"
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        crate::suites::agentdyn::testing::assert_reference_solutions_succeed::<DailyLifeSuite>();
     }
 
-    /// Doing nothing completes no task and achieves no injection goal.
     #[test]
     fn doing_nothing_fails() {
-        let pre_env = pre_env();
-        for (id, task) in DailyLifeSuite::TASKS {
-            assert!(!task.utility("", &pre_env, &pre_env, &[]), "{id}");
-        }
-        for (id, injection) in DailyLifeSuite::INJECTIONS {
-            assert!(!injection.security("", &pre_env, &pre_env, &[]), "{id}");
-        }
+        crate::suites::agentdyn::testing::assert_doing_nothing_fails::<DailyLifeSuite>();
+    }
+
+    #[test]
+    fn reference_traces_use_only_the_suites_tools() {
+        crate::suites::testing::assert_reference_traces_use_suite_tools::<DailyLifeSuite>();
     }
 
     #[test]
