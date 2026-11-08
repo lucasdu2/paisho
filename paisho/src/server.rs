@@ -15,13 +15,13 @@ use crate::attacks::{
 };
 use crate::environments::Environment;
 use crate::results::{self, BenchmarkConfig, EpisodeKey, EpisodeResult, ToolCallRecord};
-use crate::suites::banking::BankingSuite;
-use crate::suites::dailylife::DailyLifeSuite;
-use crate::suites::github::GitHubSuite;
-use crate::suites::shopping::ShoppingSuite;
-use crate::suites::slack::SlackSuite;
-use crate::suites::travel::TravelSuite;
-use crate::suites::workspace::WorkspaceSuite;
+use crate::suites::agentdojo::banking::BankingSuite;
+use crate::suites::agentdojo::slack::SlackSuite;
+use crate::suites::agentdojo::travel::TravelSuite;
+use crate::suites::agentdojo::workspace::WorkspaceSuite;
+use crate::suites::agentdyn::dailylife::DailyLifeSuite;
+use crate::suites::agentdyn::github::GitHubSuite;
+use crate::suites::agentdyn::shopping::ShoppingSuite;
 use crate::suites::{
     Injection, Recording, Suite, SuiteEnvironment, Task, ToolCall, ToolError, ToolResult,
 };

@@ -285,9 +285,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::suites::slack::SlackWeb;
-    use crate::suites::slack::injections::Injection5;
-    use crate::suites::slack::tasks::*;
+    use crate::suites::agentdojo::slack::SlackWeb;
+    use crate::suites::agentdojo::slack::injections::Injection5;
+    use crate::suites::agentdojo::slack::tasks::*;
     use crate::suites::{ToolCall, call};
 
     fn seen<T: Task<Env = SlackWeb>>(task: &T) -> Vec<String> {

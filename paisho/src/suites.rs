@@ -2,14 +2,9 @@ use std::collections::HashMap;
 
 use crate::environments::Environment;
 
-pub mod banking;
-pub mod dailylife;
+pub mod agentdojo;
+pub mod agentdyn;
 mod data;
-pub mod github;
-pub mod shopping;
-pub mod slack;
-pub mod travel;
-pub mod workspace;
 
 pub trait Task {
     type Env: Environment;
