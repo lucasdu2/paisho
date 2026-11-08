@@ -5,13 +5,8 @@
 use serde_json::json;
 
 use super::SlackWeb;
-use super::tasks::external_channel;
+use super::tasks::{external_channel, str_arg};
 use crate::suites::{Injection, ToolCall, call};
-
-/// The string argument `key` of `call`, or `None` if it is missing or not a string.
-fn str_arg<'a>(call: &'a ToolCall, key: &str) -> Option<&'a str> {
-    call.arguments.get(key).and_then(|value| value.as_str())
-}
 
 pub struct Injection1;
 
