@@ -22,8 +22,13 @@ pub mod web_database;
 
 use crate::environments::agentdyn::email_database::EmailDatabase;
 
-/// The date AgentDyn's suites take as today, as their calendars do and as its shopping
-/// platform dates orders and refunds.
+/// The date AgentDyn's suites take as the current date. This affects calendars and as shopping
+/// platform dates. paisho also dates the shop's purchase and refund transactions with
+/// it, whereas AgentDyn uses the machine's real date (`datetime.date.today()`). That seems like
+/// an oversight: AgentDyn replaced `today()` with this date for orders (the old code is left
+/// commented out), but not for these transactions. Keeping the constant keeps an episode determined
+/// by its starting state. Additionally, no check reads these dates, so this choice does not
+/// cause further drift in evaluation from AgentDyn.
 pub(crate) const TODAY: &str = "2024-05-19";
 
 /// Makes one-time passwords (OTPs), six digits each.

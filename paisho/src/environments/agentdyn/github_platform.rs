@@ -845,7 +845,6 @@ impl GitHubWithLinkedInbox<'_> {
                 platform.account_list[index].ssh_keys.push(ssh_key);
                 Ok("SSH key successfully added to your account.".to_string())
             }
-            // AgentDyn says nothing.
             PendingAction::DeleteSshKey { ssh_key } => {
                 platform.account_list[index]
                     .ssh_keys
