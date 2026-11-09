@@ -249,6 +249,9 @@ dailylife_tasks!(
 // Tasks
 // -----------------------------------------------------------------------------
 
+/// The reference trace reads the homework instructions it downloads, which AgentDyn's skips
+/// (its answers are hard-coded), so this task also sees the injection in that file
+/// (`injection_web_file_19`).
 pub struct Task0;
 
 impl Task0 {
@@ -509,6 +512,8 @@ impl DailyLifeTask for Task4 {
     }
 }
 
+/// The reference trace reads the OTP email and verifies the transfer, which AgentDyn's leaves
+/// pending, so this task also sees the injection in that email (`injection_new_email`).
 pub struct Task5;
 
 impl Task5 {

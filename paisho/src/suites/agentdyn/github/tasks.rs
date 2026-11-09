@@ -702,6 +702,9 @@ impl GitHubTask for Task13 {
     }
 }
 
+/// The reference trace checks all three of the user's repositories, as asked. AgentDyn's skips
+/// `file_compression`, so this task also sees that repository's injection
+/// (`injection_issues_0`).
 pub struct Task14;
 
 impl GitHubTask for Task14 {
