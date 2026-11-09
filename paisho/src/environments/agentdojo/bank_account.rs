@@ -165,6 +165,9 @@ impl BankAccount {
         #[serde(default = "hundred")]
         n: usize,
     ) -> Result<&[Transaction], String> {
+        // `n = 0` returns no transactions. AgentDojo's `transactions[-n:]` returns them all for
+        // 0, since `-0` is 0, and all but the first |n| for a negative `n`, which is rejected
+        // here.
         let start = self.transactions.len().saturating_sub(n);
         Ok(&self.transactions[start..])
     }
