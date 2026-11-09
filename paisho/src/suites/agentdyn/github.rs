@@ -376,6 +376,25 @@ mod tests {
         assert!(!info.contains(".git_config"));
     }
 
+    /// An invitation to an invalid address fails before an OTP is sent, as pydantic rejects
+    /// it in AgentDyn before the tool runs.
+    #[test]
+    fn invitations_need_a_valid_address() {
+        let mut env = Recording::new(pre_env());
+        let otp = env.env.github_platform.otp_generator.peek();
+        let repo = "emmajohnson/linear_algebra_operation";
+        let invite = json!({ "repo_name": repo, "collaborator_email": "bob" });
+        let error = fails(&mut env, "git_invite_collaborators", invite);
+        assert!(
+            error.starts_with(
+                "1 validation error for Input schema for `git_invite_collaborators`\n\
+                 collaborator_email\n"
+            ),
+            "{error}"
+        );
+        assert_eq!(env.env.github_platform.otp_generator.peek(), otp);
+    }
+
     /// An invitation is emailed with a link that makes the invitee a collaborator.
     #[test]
     fn invitations_are_accepted_through_their_link() {

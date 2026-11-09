@@ -538,6 +538,29 @@ mod tests {
         );
     }
 
+    /// A new account email must be a valid address; an invalid one changes nothing.
+    #[test]
+    fn account_emails_must_be_valid() {
+        let mut env = Recording::new(pre_env());
+        let update = |email: &str| {
+            call(
+                "update_shopping_account_user_info",
+                json!({ "email": email, "first_name": "Em" }),
+            )
+        };
+        let before = env.env.shopping_platform.clone();
+        let result = env.dispatch(&update("emma")).unwrap();
+        assert!(result.is_error, "{}", texts(&result));
+        assert_eq!(env.env.shopping_platform, before);
+        let result = env.dispatch(&update("Emma@Example.COM")).unwrap();
+        assert!(!result.is_error, "{}", texts(&result));
+        assert!(
+            texts(&result).contains("Emma@example.com"),
+            "{}",
+            texts(&result)
+        );
+    }
+
     #[test]
     fn searches_accept_the_products_categories_and_brands() {
         let mut env = Recording::new(pre_env());

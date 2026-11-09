@@ -3,6 +3,7 @@ use indexmap::IndexMap;
 use paisho_macros::tools;
 
 use crate::environments::agentdojo::email::{Attachment, Inbox};
+use crate::environments::email_str::{EmailStr, Validation};
 
 #[derive(
     Debug,
@@ -39,7 +40,7 @@ pub(crate) struct CalendarEvent {
     /// The location of the event
     pub(crate) location: Option<String>,
     /// The list of the emails of the participants
-    pub(crate) participants: Vec<String>,
+    pub(crate) participants: Vec<EmailStr>,
     /// Whether the event is all day
     #[serde(default)]
     pub(crate) all_day: bool,
@@ -48,12 +49,35 @@ pub(crate) struct CalendarEvent {
     pub(crate) status: EventStatus,
 }
 
+impl CalendarEvent {
+    /// The event an email attachment's `"event_details"` describe, with its participants'
+    /// addresses validated and normalized, or why it isn't valid.
+    pub(crate) fn from_details(details: &serde_json::Value) -> Result<Self, String> {
+        use serde_json::Value;
+
+        let mut details = details.clone();
+        if let Some(Value::Array(participants)) = details.get("participants") {
+            // Like Python's `str`: a string as is, anything else as its JSON text.
+            let texts: Vec<String> = participants
+                .iter()
+                .map(|p| match p {
+                    Value::String(text) => text.clone(),
+                    other => other.to_string(),
+                })
+                .collect();
+            let valid = Validation::run("CalendarEvent", |v| v.list("participants", &texts))?;
+            details["participants"] = serde_json::to_value(valid).expect("strings serialize");
+        }
+        serde_json::from_value(details).map_err(|e| format!("Invalid calendar event: {e}"))
+    }
+}
+
 /// The user's calendar.
 /// A calendar as a suite's data gives it, before [`Calendar::new`] indexes its events.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CalendarData {
-    account_email: String,
+    account_email: EmailStr,
     current_day: NaiveDate,
     initial_events: Vec<CalendarEvent>,
 }
@@ -80,7 +104,7 @@ impl CalendarData {
 #[serde(try_from = "CalendarData")]
 pub(crate) struct Calendar {
     pub(crate) current_day: NaiveDate,
-    pub(crate) account_email: String,
+    pub(crate) account_email: EmailStr,
     pub(crate) initial_events: Vec<CalendarEvent>,
     pub(crate) events: IndexMap<String, CalendarEvent>,
 }
@@ -93,7 +117,7 @@ impl Calendar {
     /// Returns an error if two of `initial_events` share an ID.
     pub(crate) fn new(
         current_day: NaiveDate,
-        account_email: String,
+        account_email: EmailStr,
         initial_events: Vec<CalendarEvent>,
     ) -> Result<Self, String> {
         let mut events = IndexMap::new();
@@ -133,9 +157,9 @@ impl Calendar {
         start_time: NaiveDateTime,
         end_time: NaiveDateTime,
         location: Option<String>,
-        participants: &[String],
+        participants: &[EmailStr],
     ) -> Result<CalendarEvent, String> {
-        let mut unique: Vec<String> = Vec::new();
+        let mut unique: Vec<EmailStr> = Vec::new();
         for participant in participants.iter().chain([&self.account_email]) {
             if !unique.contains(participant) {
                 unique.push(participant.clone());
@@ -243,14 +267,17 @@ impl Calendar {
     }
 
     /// Adds `participants` to the event and returns it. Unlike `create_event`, this doesn't
-    /// deduplicate.
+    /// deduplicate. The addresses are validated and normalized, so an invalid one adds
+    /// nothing; AgentDojo adds it as given.
     pub(crate) fn add_participants(
         &mut self,
         event_id: &str,
         participants: Vec<String>,
     ) -> Result<CalendarEvent, String> {
+        let participants =
+            Validation::run("CalendarEvent", |v| v.list("participants", &participants));
         let event = self.event_mut(event_id)?;
-        event.participants.extend(participants);
+        event.participants.extend(participants?);
         Ok(event.clone())
     }
 }
@@ -348,7 +375,12 @@ impl CalendarWithInbox<'_> {
     ) -> Result<CalendarEvent, String> {
         let start_time = parse_date_time(start_time)?;
         let end_time = parse_date_time(end_time)?;
-        let mut participants = participants.unwrap_or_default();
+        // Validated as AgentDojo's `CalendarEvent` model validates them, so an invalid address
+        // fails with pydantic's error and creates nothing. (AgentDojo removes duplicates
+        // first, with a `set`, so the index in its error can differ.)
+        let mut participants = Validation::run("CalendarEvent", |v| {
+            v.list("participants", &participants.unwrap_or_default())
+        })?;
         let event = self.calendar.create_event(
             title,
             &description,
@@ -443,11 +475,11 @@ mod tests {
             })),
         ];
         let day = parse_date("2024-05-15").unwrap();
-        Calendar::new(day, EMMA.to_string(), events).unwrap()
+        Calendar::new(day, EmailStr::parse(EMMA).unwrap(), events).unwrap()
     }
 
     fn inbox() -> Inbox {
-        Inbox::new(EMMA.to_string(), Vec::new(), Vec::new()).unwrap()
+        Inbox::new(EmailStr::parse(EMMA).unwrap(), Vec::new(), Vec::new()).unwrap()
     }
 
     fn run(calendar: &mut Calendar, name: &str, arguments: Value) -> ToolResult {
@@ -468,7 +500,7 @@ mod tests {
         let events = calendar().initial_events;
         let twice = vec![events[0].clone(), events[0].clone()];
         let day = parse_date("2024-05-15").unwrap();
-        let error = Calendar::new(day, EMMA.to_string(), twice).unwrap_err();
+        let error = Calendar::new(day, EmailStr::parse(EMMA).unwrap(), twice).unwrap_err();
         assert_eq!(error, "Event IDs must be unique. Duplicates: [\"6\"]");
     }
 
@@ -508,11 +540,8 @@ mod tests {
     #[test]
     fn created_events_get_the_next_id_and_the_account_as_participant() {
         let mut calendar = calendar();
-        let participants = [
-            "lily.white@gmail.com".to_string(),
-            EMMA.to_string(),
-            "lily.white@gmail.com".to_string(),
-        ];
+        let participants = ["lily.white@gmail.com", EMMA, "lily.white@gmail.com"]
+            .map(|address| EmailStr::parse(address).unwrap());
         let event = calendar
             .create_event(
                 "Party",
@@ -584,6 +613,26 @@ mod tests {
             calendar.events["1"].participants,
             [EMMA, EMMA, "sarah@gmail.com"]
         );
+
+        // An invalid address adds nothing; valid ones are normalized.
+        let invalid = run(
+            &mut calendar,
+            "add_calendar_event_participants",
+            json!({ "event_id": "1", "participants": ["bob@gmail.com", "Sarah"] }),
+        );
+        assert!(invalid.is_error);
+        assert!(
+            text(&invalid).starts_with("1 validation error for CalendarEvent\nparticipants.1\n"),
+            "{}",
+            text(&invalid)
+        );
+        assert_eq!(calendar.events["1"].participants.len(), 3);
+        run(
+            &mut calendar,
+            "add_calendar_event_participants",
+            json!({ "event_id": "1", "participants": ["Bob@Gmail.com"] }),
+        );
+        assert_eq!(calendar.events["1"].participants[3], "Bob@gmail.com");
     }
 
     combine_environments! {
@@ -594,6 +643,34 @@ mod tests {
         views {
             CalendarWithInbox { calendar, inbox },
         }
+    }
+
+    /// An invalid participant creates no event and sends no invitation.
+    #[test]
+    fn invalid_participants_create_nothing() {
+        use crate::environments::Environment;
+
+        let mut workspace = Workspace {
+            inbox: inbox(),
+            calendar: calendar(),
+        };
+        let result = workspace
+            .dispatch(&call(
+                "create_calendar_event",
+                json!({
+                    "title": "Party", "start_time": "2024-05-18 18:00",
+                    "end_time": "2024-05-18 22:00", "participants": ["Lily"],
+                }),
+            ))
+            .unwrap();
+        assert!(result.is_error);
+        assert!(
+            text(&result).starts_with("1 validation error for CalendarEvent\nparticipants.0\n"),
+            "{}",
+            text(&result)
+        );
+        assert_eq!(workspace.calendar.events.len(), 3);
+        assert!(workspace.inbox.emails.is_empty());
     }
 
     #[test]

@@ -1,5 +1,6 @@
 pub mod agentdojo;
 pub mod agentdyn;
+pub(crate) mod email_str;
 
 use crate::suites::{ToolCall, ToolError, ToolResult};
 

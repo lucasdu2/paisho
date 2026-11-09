@@ -2,6 +2,8 @@ use chrono::NaiveDateTime;
 use indexmap::IndexMap;
 use paisho_macros::tools;
 
+use crate::environments::email_str::{EmailStr, Validation};
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
 )]
@@ -22,13 +24,13 @@ pub(crate) struct CloudDriveFile {
     /// The content of the file
     pub(crate) content: String,
     /// The email of the owner of the file
-    pub(crate) owner: String,
+    pub(crate) owner: EmailStr,
     /// The last modified timestamp
     #[serde(deserialize_with = "crate::environments::deserialize_date_time")]
     pub(crate) last_modified: NaiveDateTime,
     /// The object containing emails with their sharing permissions
     #[serde(default)]
-    pub(crate) shared_with: IndexMap<String, SharingPermission>,
+    pub(crate) shared_with: IndexMap<EmailStr, SharingPermission>,
     /// The size of the file in bytes
     #[serde(default)]
     pub(crate) size: usize,
@@ -44,7 +46,7 @@ fn size(content: &str) -> usize {
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct CloudDrive {
     pub(crate) initial_files: Vec<CloudDriveFile>,
-    pub(crate) account_email: String,
+    pub(crate) account_email: EmailStr,
     pub(crate) files: IndexMap<CloudDriveFileID, CloudDriveFile>,
 }
 
@@ -57,7 +59,7 @@ impl CloudDrive {
     /// Returns an error if two of `initial_files` share an ID.
     pub(crate) fn new(
         mut initial_files: Vec<CloudDriveFile>,
-        account_email: String,
+        account_email: EmailStr,
     ) -> Result<Self, String> {
         for file in &mut initial_files {
             file.size = size(&file.content);
@@ -177,8 +179,11 @@ impl CloudDrive {
         #[describe = "The email of the user to share the file with."] email: &str,
         #[describe = "The permission level to grant the user."] permission: SharingPermission,
     ) -> Result<CloudDriveFile, String> {
+        // AgentDojo shares with any string; here the address must be valid.
+        let email = Validation::run("Input schema for `share_file`", |v| v.field("email", email));
         let file = self.file_mut(file_id)?;
-        file.shared_with.insert(email.to_string(), permission);
+        let email = email?;
+        file.shared_with.insert(email, permission);
         Ok(file.clone())
     }
 
@@ -237,7 +242,7 @@ mod tests {
                 "shared_with": { "alex.martin@bluesparrowtech.com": "r" },
             })),
         ];
-        CloudDrive::new(files, EMMA.to_string()).unwrap()
+        CloudDrive::new(files, EmailStr::parse(EMMA).unwrap()).unwrap()
     }
 
     fn run(drive: &mut CloudDrive, name: &str, arguments: Value) -> ToolResult {
@@ -273,7 +278,7 @@ mod tests {
     fn duplicate_ids_are_rejected() {
         let files = drive().initial_files;
         let twice = vec![files[0].clone(), files[0].clone()];
-        let error = CloudDrive::new(twice, EMMA.to_string()).unwrap_err();
+        let error = CloudDrive::new(twice, EmailStr::parse(EMMA).unwrap()).unwrap_err();
         assert_eq!(error, "File IDs must be unique. Duplicates: [\"0\"]");
     }
 
@@ -353,6 +358,14 @@ mod tests {
             json!({ "file_id": "0", "email": "bob@gmail.com", "permission": "write" }),
         );
         assert!(bad.is_error);
+        let invalid = run(
+            &mut drive,
+            "share_file",
+            json!({ "file_id": "0", "email": "carol", "permission": "r" }),
+        );
+        assert!(invalid.is_error);
+        assert!(text(&invalid).contains("value is not a valid email address"));
+        assert_eq!(drive.files["0"].shared_with.len(), 1);
     }
 
     #[test]

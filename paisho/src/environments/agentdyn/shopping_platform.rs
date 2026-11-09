@@ -18,6 +18,7 @@ use crate::environments::agentdyn::email_database::EmailDatabase;
 use crate::environments::agentdyn::file_tree::{File, Permissions};
 use crate::environments::agentdyn::web_database::WebDatabase;
 use crate::environments::agentdyn::{OtpGenerator, TODAY};
+use crate::environments::email_str::{EmailStr, Validation};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,7 +27,7 @@ pub(crate) struct User {
     pub(crate) last_name: String,
     #[serde(rename = "ID_number")]
     pub(crate) id_number: String,
-    pub(crate) email: String,
+    pub(crate) email: EmailStr,
     pub(crate) phone_number: String,
     pub(crate) address: String,
     pub(crate) passport_number: String,
@@ -295,7 +296,7 @@ impl ShoppingPlatform {
         let account = self.current()?;
         let user = &account.user_info;
         Ok(IndexMap::from([
-            ("Email", user.email.clone()),
+            ("Email", user.email.to_string()),
             ("Username", account.username.clone()),
             ("Password", account.password.clone()),
             ("First Name", user.first_name.clone()),
@@ -325,13 +326,23 @@ impl ShoppingPlatform {
             String,
         >,
     ) -> Result<IndexMap<&'static str, String>, String> {
+        // AgentDyn accepts any string as the email; here a new one must be a valid address.
+        let email = match email.filter(|email| !email.is_empty()) {
+            Some(email) => Some(Validation::run(
+                "Input schema for `update_shopping_account_user_info`",
+                |v| v.field("email", &email),
+            )?),
+            None => None,
+        };
         let user = &mut self.current_mut()?.user_info;
+        if let Some(email) = email {
+            user.email = email;
+        }
         // As in AgentDyn, an empty value leaves the field as it is.
         for (field, value) in [
             (&mut user.first_name, first_name),
             (&mut user.last_name, last_name),
             (&mut user.id_number, id_number),
-            (&mut user.email, email),
             (&mut user.phone_number, phone_number),
             (&mut user.address, address),
             (&mut user.passport_number, passport_number),
@@ -345,7 +356,7 @@ impl ShoppingPlatform {
             ("first_name", user.first_name.clone()),
             ("last_name", user.last_name.clone()),
             ("id_number", user.id_number.clone()),
-            ("email", user.email.clone()),
+            ("email", user.email.to_string()),
             ("phone_number", user.phone_number.clone()),
             ("address", user.address.clone()),
             ("passport_number", user.passport_number.clone()),
@@ -832,7 +843,7 @@ impl ShoppingWithLinkedAccounts<'_> {
     }
 
     /// The inbox linked to the current shopping account.
-    fn linked_inbox_address(&self) -> Result<String, String> {
+    fn linked_inbox_address(&self) -> Result<EmailStr, String> {
         Ok(self.shopping_platform.current()?.user_info.email.clone())
     }
 }
@@ -936,7 +947,7 @@ impl ShoppingWithLinkedAccounts<'_> {
             .upload(&format!("Invoice_{order_id}.txt"), &invoice);
         self.email_database.deliver(
             SHOP_SENDER,
-            vec![address],
+            vec![address.to_string()],
             &format!("Invoice for {order_id}"),
             &format!(
                 "Your shopping invoice for {order_id} has been attached. Please find the \

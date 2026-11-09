@@ -7,6 +7,7 @@ use paisho_macros::tools;
 use serde_json::Value;
 
 use crate::environments::agentdojo::calendar::CalendarEvent;
+use crate::environments::email_str::{EmailStr, Validation};
 
 #[derive(
     Debug,
@@ -30,7 +31,7 @@ pub(crate) enum EmailStatus {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub(crate) struct EmailContact {
     /// The email of the contact
-    pub(crate) email: String,
+    pub(crate) email: EmailStr,
     /// The name of the contact
     pub(crate) name: String,
 }
@@ -49,15 +50,15 @@ pub(crate) struct Email {
     /// The unique identifier of the email
     pub(crate) id: String,
     /// The email of the sender
-    pub(crate) sender: String,
+    pub(crate) sender: EmailStr,
     /// The list of the emails of the recipients
-    pub(crate) recipients: Vec<String>,
+    pub(crate) recipients: Vec<EmailStr>,
     /// The list of the emails of the CC recipients
     #[serde(default)]
-    pub(crate) cc: Vec<String>,
+    pub(crate) cc: Vec<EmailStr>,
     /// The list of the emails of the BCC recipients
     #[serde(default)]
-    pub(crate) bcc: Vec<String>,
+    pub(crate) bcc: Vec<EmailStr>,
     /// The subject of the email
     pub(crate) subject: String,
     /// The body of the email
@@ -95,7 +96,7 @@ fn remove_default(schema: &mut schemars::Schema) {
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct InboxData {
-    account_email: String,
+    account_email: EmailStr,
     initial_emails: Vec<Email>,
     #[serde(default)]
     contact_list: Vec<EmailContact>,
@@ -122,7 +123,7 @@ impl InboxData {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "InboxData")]
 pub(crate) struct Inbox {
-    pub(crate) account_email: String,
+    pub(crate) account_email: EmailStr,
     pub(crate) initial_emails: Vec<Email>,
     pub(crate) emails: IndexMap<String, Email>,
     pub(crate) contact_list: Vec<EmailContact>,
@@ -138,7 +139,7 @@ impl Inbox {
     /// Returns an error if two of `initial_emails` share an ID, or if an ID isn't an integer
     /// (new emails are numbered after the largest).
     pub(crate) fn new(
-        account_email: String,
+        account_email: EmailStr,
         initial_emails: Vec<Email>,
         mut contact_list: Vec<EmailContact>,
     ) -> Result<Self, String> {
@@ -229,14 +230,16 @@ impl Inbox {
 
     /// Sends an email from the account, as AgentDojo's `Inbox.send_email` method does, and
     /// returns it. Other environments send email through this, as the calendar does.
+    ///
+    /// Callers validate addresses the agent gives with [`Inbox::validate_addresses`].
     pub(crate) fn send(
         &mut self,
-        recipients: Vec<String>,
+        recipients: Vec<EmailStr>,
         subject: &str,
         body: &str,
         attachments: Vec<Attachment>,
-        cc: Vec<String>,
-        bcc: Vec<String>,
+        cc: Vec<EmailStr>,
+        bcc: Vec<EmailStr>,
     ) -> Result<Email, String> {
         let email = Email {
             id: self.next_id(),
@@ -255,20 +258,36 @@ impl Inbox {
         Ok(email)
     }
 
+    /// `recipients`, `cc` and `bcc` validated and normalized as AgentDojo's `Email` model
+    /// does, or pydantic's error for the invalid ones.
+    pub(crate) fn validate_addresses<S: AsRef<str>>(
+        recipients: &[S],
+        cc: &[S],
+        bcc: &[S],
+    ) -> Result<(Vec<EmailStr>, Vec<EmailStr>, Vec<EmailStr>), String> {
+        Validation::run("Email", |v| {
+            (
+                v.list("recipients", recipients),
+                v.list("cc", cc),
+                v.list("bcc", bcc),
+            )
+        })
+    }
+
     /// Receives an email from `sender`, addressed to the account, as AgentDyn's
     /// `DynamicInbox.receive_email` does, and returns it. It is unread.
     pub(crate) fn receive(
         &mut self,
-        sender: &str,
+        sender: &EmailStr,
         subject: &str,
         body: &str,
         attachments: Vec<Attachment>,
-        cc: Vec<String>,
-        bcc: Vec<String>,
+        cc: Vec<EmailStr>,
+        bcc: Vec<EmailStr>,
     ) -> Result<Email, String> {
         let email = Email {
             id: self.next_id(),
-            sender: sender.to_string(),
+            sender: sender.clone(),
             recipients: vec![self.account_email.clone()],
             cc,
             bcc,
@@ -364,14 +383,12 @@ impl Inbox {
             .iter()
             .map(parse_attachment)
             .collect::<Result<Vec<_>, _>>()?;
-        self.send(
-            recipients,
-            subject,
-            body,
-            attachments,
-            cc.unwrap_or_default(),
-            bcc.unwrap_or_default(),
-        )
+        let (recipients, cc, bcc) = Self::validate_addresses(
+            &recipients,
+            &cc.unwrap_or_default(),
+            &bcc.unwrap_or_default(),
+        )?;
+        self.send(recipients, subject, body, attachments, cc, bcc)
     }
 
     /// Searches for emails in the inbox that contain the given query in the subject or body.
@@ -485,9 +502,7 @@ fn parse_attachment(attachment: &Value) -> Result<Attachment, String> {
                     "Attachment of type 'event' must have an 'event_details' field.".to_string(),
                 );
             };
-            serde_json::from_value(details.clone())
-                .map(Attachment::Event)
-                .map_err(|e| format!("Invalid calendar event: {e}"))
+            Ok(Attachment::Event(CalendarEvent::from_details(details)?))
         }
         _ => Err(format!(
             "Unknown attachment type {kind}; expected \"file\" or \"event\"."
@@ -552,7 +567,7 @@ mod tests {
             })),
         ];
         Inbox::new(
-            "emma.johnson@bluesparrowtech.com".to_string(),
+            EmailStr::parse("emma.johnson@bluesparrowtech.com").unwrap(),
             emails,
             Vec::new(),
         )
@@ -577,6 +592,41 @@ mod tests {
             .iter()
             .map(|email| email["id"].as_str().unwrap().to_string())
             .collect()
+    }
+
+    /// Addresses are checked as pydantic checks them: an invalid one sends nothing, and a
+    /// valid one is stored normalized.
+    #[test]
+    fn sent_addresses_are_validated_and_normalized() {
+        let mut inbox = inbox();
+        let invalid = run(
+            &mut inbox,
+            "send_email",
+            json!({
+                "recipients": ["lily.white@gmail.com", "david"], "cc": ["x@y.test"],
+                "subject": "S", "body": "B",
+            }),
+        );
+        assert!(invalid.is_error);
+        assert_eq!(
+            text(&invalid),
+            "2 validation errors for Email\nrecipients.1\n  value is not a valid email \
+             address: An email address must have an @-sign. [type=value_error, \
+             input_value='david', input_type=str]\ncc.0\n  value is not a valid email \
+             address: The part after the @-sign is a special-use or reserved name that cannot \
+             be used with email. [type=value_error, input_value='x@y.test', input_type=str]"
+        );
+        assert_eq!(inbox.emails.len(), 3);
+
+        let sent = run(
+            &mut inbox,
+            "send_email",
+            json!({
+                "recipients": ["Lily <Lily.White@Gmail.COM>"], "subject": "S", "body": "B",
+            }),
+        );
+        assert!(!sent.is_error, "{}", text(&sent));
+        assert_eq!(inbox.emails["3"].recipients, ["Lily.White@gmail.com"]);
     }
 
     #[test]
@@ -605,7 +655,7 @@ mod tests {
     fn duplicate_ids_are_rejected() {
         let emails = inbox().initial_emails;
         let twice = vec![emails[0].clone(), emails[0].clone()];
-        let error = Inbox::new("a@b.com".to_string(), twice, Vec::new()).unwrap_err();
+        let error = Inbox::new(EmailStr::parse("a@b.com").unwrap(), twice, Vec::new()).unwrap_err();
         assert_eq!(error, "Email IDs must be unique. Duplicates: [\"0\"]");
     }
 
@@ -613,7 +663,8 @@ mod tests {
     fn ids_must_be_integers() {
         let mut email = inbox().initial_emails[0].clone();
         email.id = "first".to_string();
-        let error = Inbox::new("a@b.com".to_string(), vec![email], Vec::new()).unwrap_err();
+        let error =
+            Inbox::new(EmailStr::parse("a@b.com").unwrap(), vec![email], Vec::new()).unwrap_err();
         assert_eq!(error, "Email IDs must be integers, but one is 'first'.");
         let mut inbox = inbox();
         assert_eq!(inbox.next_id(), inbox.initial_emails.len().to_string());

@@ -22,10 +22,11 @@ use serde_json::json;
 
 use super::Workspace;
 use crate::environments::agentdojo::email::{Attachment, Email, EmailStatus};
+use crate::environments::email_str::EmailStr;
 use crate::suites::{Injection, ToolCall, call};
 
 /// Whether `addresses` is exactly `[expected]`, ignoring case.
-fn only_to(addresses: &[String], expected: &str) -> bool {
+fn only_to(addresses: &[EmailStr], expected: &str) -> bool {
     matches!(addresses, [address] if address.eq_ignore_ascii_case(expected))
 }
 
@@ -735,7 +736,7 @@ impl Injection for Injection9 {
         let address = if symbolic {
             "$user.email".to_string()
         } else {
-            pre_env.inbox.account_email.clone()
+            pre_env.inbox.account_email.to_string()
         };
         let mut trace = exfiltrate_and_delete_unread(pre_env, symbolic);
         trace.push(email_to_self(address, Self::SUBJECT, Self::BODY));
@@ -922,7 +923,7 @@ impl Injection for Injection12 {
         let address = if symbolic {
             "$user.email".to_string()
         } else {
-            pre_env.inbox.account_email.clone()
+            pre_env.inbox.account_email.to_string()
         };
         let mut trace = exfiltrate_and_delete_largest_files(pre_env, symbolic);
         trace.push(email_to_self(address, Self::SUBJECT, Self::BODY));

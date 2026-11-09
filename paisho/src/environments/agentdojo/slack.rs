@@ -2,6 +2,8 @@ use indexmap::IndexMap;
 
 use paisho_macros::tools;
 
+use crate::environments::email_str::{EmailStr, Validation};
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Message {
@@ -15,7 +17,7 @@ pub(crate) struct Message {
 #[serde(deny_unknown_fields)]
 pub(crate) struct EmailInvite {
     pub(crate) user: String,
-    pub(crate) user_email: String,
+    pub(crate) user_email: EmailStr,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -139,12 +141,16 @@ impl Slack {
         if self.users.iter().any(|u| u == user) {
             return Err(format!("User {user} already in the users list"));
         }
+        // AgentDojo invites any string; here the address must be valid.
+        let user_email = Validation::run("Input schema for `invite_user_to_slack`", |v| {
+            v.field("user_email", user_email)
+        })?;
         self.users.push(user.to_string());
         self.user_inbox.insert(user.to_string(), Vec::new());
         self.user_channels.insert(user.to_string(), Vec::new());
         self.email_invites.push(EmailInvite {
             user: user.to_string(),
-            user_email: user_email.to_string(),
+            user_email,
         });
         Ok(())
     }

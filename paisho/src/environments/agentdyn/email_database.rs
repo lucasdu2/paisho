@@ -12,6 +12,7 @@ use serde_json::Value;
 use crate::environments::agentdojo::email::{Attachment, Email, EmailContact, Inbox};
 use crate::environments::agentdyn::file_tree::FileTree;
 use crate::environments::agentdyn::web_database::{AttachmentSpec, WebDatabase};
+use crate::environments::email_str::{EmailStr, Validation};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -19,7 +20,7 @@ pub(crate) struct EmailDatabase {
     pub(crate) inbox_list: Vec<Inbox>,
     /// The address the user is logged in to.
     #[serde(default)]
-    pub(crate) current_account: Option<String>,
+    pub(crate) current_account: Option<EmailStr>,
 }
 
 const NOT_LOGGED_IN: &str = "No email account is logged in.";
@@ -34,15 +35,15 @@ impl EmailDatabase {
 
     /// The inbox of `address`, created empty if it has none, as AgentDyn's
     /// `get_email_account_instance` does.
-    pub(crate) fn inbox_mut(&mut self, address: &str) -> &mut Inbox {
+    pub(crate) fn inbox_mut(&mut self, address: &EmailStr) -> &mut Inbox {
         let index = match self
             .inbox_list
             .iter()
-            .position(|inbox| inbox.account_email == address)
+            .position(|inbox| inbox.account_email == *address)
         {
             Some(index) => index,
             None => {
-                let inbox = Inbox::new(address.to_string(), Vec::new(), Vec::new())
+                let inbox = Inbox::new(address.clone(), Vec::new(), Vec::new())
                     .expect("an inbox with no emails has no duplicate IDs");
                 self.inbox_list.push(inbox);
                 self.inbox_list.len() - 1
@@ -65,8 +66,13 @@ impl EmailDatabase {
 
     /// Sends an email from `sender` and delivers it to every recipient, as AgentDyn's
     /// `send_receive_email` does: the sender's inbox keeps a sent copy and each recipient's
-    /// inbox receives one. Inboxes are created for addresses without one. Returns the last
-    /// copy received, or the sent copy if there are no recipients.
+    /// inbox receives one. Returns the last copy received, or the sent copy if there are no
+    /// recipients.
+    ///
+    /// As in AgentDyn, each recipient's inbox is found first, and one is created, for the
+    /// normalized address, for a recipient with none. An invalid address fails there with
+    /// pydantic's error for `DynamicInbox`, keeping the inboxes created before it; an invalid
+    /// cc or bcc address fails when the email is sent, after the inboxes are created.
     // The arguments are those of an email, as in AgentDyn's `send_receive_email`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn deliver(
@@ -79,17 +85,40 @@ impl EmailDatabase {
         cc: Vec<String>,
         bcc: Vec<String>,
     ) -> Result<Email, String> {
-        let mut last = self.inbox_mut(sender).send(
-            recipients.clone(),
+        // Callers pass the addresses of AgentDyn's web pages and of the platforms, which are
+        // valid; this fails, as AgentDyn's `Email` does, if one isn't.
+        let sender = Validation::run("Email", |v| v.field("sender", sender))?;
+        let mut targets = Vec::new();
+        for recipient in &recipients {
+            let index = match self
+                .inbox_list
+                .iter()
+                .position(|inbox| inbox.account_email == *recipient)
+            {
+                Some(index) => index,
+                None => {
+                    let address =
+                        Validation::run("DynamicInbox", |v| v.field("account_email", recipient))?;
+                    let inbox = Inbox::new(address, Vec::new(), Vec::new())
+                        .expect("an inbox with no emails has no duplicate IDs");
+                    self.inbox_list.push(inbox);
+                    self.inbox_list.len() - 1
+                }
+            };
+            targets.push(index);
+        }
+        let (recipients, cc, bcc) = Inbox::validate_addresses(&recipients, &cc, &bcc)?;
+        let mut last = self.inbox_mut(&sender).send(
+            recipients,
             subject,
             body,
             attachments.clone(),
             cc.clone(),
             bcc.clone(),
         )?;
-        for recipient in &recipients {
-            last = self.inbox_mut(recipient).receive(
-                sender,
+        for index in targets {
+            last = self.inbox_list[index].receive(
+                &sender,
                 subject,
                 body,
                 attachments.clone(),
@@ -294,6 +323,44 @@ mod tests {
         .unwrap();
         assert_eq!(db.inbox("c@x.com").unwrap().sent().len(), 1);
         assert_eq!(db.inbox("me@x.com").unwrap().received().len(), 2);
+    }
+
+    /// As in AgentDyn, recipients' inboxes are created before anything is sent, so an
+    /// invalid address fails after the inboxes for the addresses before it are created.
+    #[test]
+    fn invalid_addresses_fail_after_earlier_inboxes_are_created() {
+        let mut db = database();
+        let deliver = |db: &mut EmailDatabase, recipients: &[&str], cc: &[&str]| {
+            let strings = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+            db.deliver(
+                "me@x.com",
+                strings(recipients),
+                "S",
+                "B",
+                Vec::new(),
+                strings(cc),
+                Vec::new(),
+            )
+        };
+        let error = deliver(&mut db, &["b@x.com", "bob"], &[]).unwrap_err();
+        assert!(
+            error.starts_with("1 validation error for DynamicInbox\naccount_email\n"),
+            "{error}"
+        );
+        assert!(db.inbox("b@x.com").is_some());
+        assert!(db.inbox("me@x.com").unwrap().sent().is_empty());
+
+        let error = deliver(&mut db, &["C@X.com"], &["nope"]).unwrap_err();
+        assert!(
+            error.starts_with("1 validation error for Email\ncc.0\n"),
+            "{error}"
+        );
+        assert!(db.inbox("C@x.com").is_some());
+        assert!(db.inbox("me@x.com").unwrap().sent().is_empty());
+
+        // A new inbox gets the normalized address, and the email reaches it.
+        deliver(&mut db, &["D@X.com"], &[]).unwrap();
+        assert_eq!(db.inbox("D@x.com").unwrap().received().len(), 1);
     }
 
     #[test]

@@ -11,6 +11,7 @@ use paisho_macros::tools;
 use serde_json::Value;
 
 use crate::environments::agentdojo::web::standardize_url;
+use crate::environments::email_str::EmailStr;
 
 use crate::environments::agentdojo::calendar::CalendarEvent;
 use crate::environments::agentdojo::email::{Attachment, Email};
@@ -210,9 +211,7 @@ impl AttachmentSpec {
                             .to_string(),
                     );
                 };
-                serde_json::from_value(details.clone())
-                    .map(AttachmentSpec::Event)
-                    .map_err(|e| format!("Invalid calendar event: {e}"))
+                Ok(AttachmentSpec::Event(CalendarEvent::from_details(details)?))
             }
             _ => Err(format!(
                 "Unknown attachment type {kind}; expected \"file\" or \"event\"."
@@ -388,7 +387,7 @@ pub(crate) struct DownloadAction {
 #[serde(deny_unknown_fields)]
 pub(crate) struct InvitationAction {
     pub(crate) repo_name: String,
-    pub(crate) collaborator_email: String,
+    pub(crate) collaborator_email: EmailStr,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -876,6 +875,11 @@ impl GitHubBrowser<'_> {
 
     /// Interact with the target webpage. Strictly follow the url and inputs format below to
     /// fill the web form.
+    // Unlike AgentDyn's, this can act on the GitHub platform: given an invitation link and no
+    // inputs, it accepts the invitation, as `browse_webpage` does. AgentDyn's
+    // `input_to_webpage` doesn't pass `github_platform` to the page's handler, so there the
+    // call fails with a TypeError and leaves the environment as it was. That looks like a bug
+    // in AgentDyn (as of commit `089ed46`), so this doesn't copy it.
     fn input_to_webpage(
         &mut self,
         #[describe = "The URL of the webpage."] url: &str,
@@ -914,6 +918,22 @@ mod tests {
             AttachmentSpec::FileId("3".to_string())
         );
         assert!(parse(&json!({ "type": "file" })).is_err());
+        let event = |participant: &str| {
+            json!({ "type": "event", "event_details": {
+                "id": "1", "title": "T", "description": "", "location": null,
+                "start_time": "2024-05-15T10:00", "end_time": "2024-05-15T11:00",
+                "participants": [participant],
+            }})
+        };
+        let Ok(AttachmentSpec::Event(parsed)) = parse(&event("A@X.com")) else {
+            panic!()
+        };
+        assert_eq!(parsed.participants, ["A@x.com"]);
+        let invalid = parse(&event("alice")).unwrap_err();
+        assert!(
+            invalid.starts_with("1 validation error for CalendarEvent"),
+            "{invalid}"
+        );
         assert!(parse(&json!({ "type": "photo" })).is_err());
         assert!(parse(&json!("1")).is_err());
         let action: WebAction = serde_json::from_value(json!({

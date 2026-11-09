@@ -1,0 +1,877 @@
+{
+ "generated_with": {
+  "pydantic": "2.11.4",
+  "email-validator": "2.2.0"
+ },
+ "validation_error": "5 validation errors for Email\nrecipients.1\n  value is not a valid email address: An email address must have an @-sign. [type=value_error, input_value='bob', input_type=str]\nrecipients.2\n  value is not a valid email address: An email address must have an @-sign. [type=value_error, input_value='xxxxxxxxxxxxxxxxxxxxxxxx...xxxxxxxxxxxxxxxxxxxxxxx', input_type=str]\nrecipients.3\n  value is not a valid email address: An email address must have an @-sign. [type=value_error, input_value=\"it's\", input_type=str]\nrecipients.4\n  value is not a valid email address: An email address must have an @-sign. [type=value_error, input_value='a\"b\\'c', input_type=str]\ncc.0\n  value is not a valid email address: An email address must have an @-sign. [type=value_error, input_value='a\\nb', input_type=str]",
+ "cases": [
+  {
+   "input": "emma.johnson@bluesparrowtech.com",
+   "normalized": "emma.johnson@bluesparrowtech.com"
+  },
+  {
+   "input": "Emma.Johnson@BlueSparrowTech.COM",
+   "normalized": "Emma.Johnson@bluesparrowtech.com"
+  },
+  {
+   "input": "  bob@example.com\t",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "\u001cbob@example.com\u001f",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "Postmaster@Example.com",
+   "normalized": "postmaster@example.com"
+  },
+  {
+   "input": "SUPPORT@example.com",
+   "normalized": "support@example.com"
+  },
+  {
+   "input": "a+tag@sub.example.co.uk",
+   "normalized": "a+tag@sub.example.co.uk"
+  },
+  {
+   "input": "a_b-c@x-y.example.com",
+   "normalized": "a_b-c@x-y.example.com"
+  },
+  {
+   "input": "!#$%&'*+-/=?^_`{|}~@example.com",
+   "normalized": "!#$%&'*+-/=?^_`{|}~@example.com"
+  },
+  {
+   "input": "x@1a.com",
+   "normalized": "x@1a.com"
+  },
+  {
+   "input": "x@a.b1c",
+   "normalized": "x@a.b1c"
+  },
+  {
+   "input": "Bob <bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "  Bob   Smith  <Bob@Example.com>  ",
+   "normalized": "Bob@example.com"
+  },
+  {
+   "input": "<bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "\"Smith, Bob\" <bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "\"Bob \"the\" Smith\" <bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "Bob Smith<bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "Bob.Smith <bob@example.com>",
+   "error": "value is not a valid email address: The display name contains invalid characters when not quoted: '.'."
+  },
+  {
+   "input": "Bob <bob@example.com",
+   "error": "value is not a valid email address: An open angle bracket at the start of the email address has to be followed by a close angle bracket at the end."
+  },
+  {
+   "input": "Bob <bob@example.com> extra",
+   "error": "value is not a valid email address: There can't be anything after the email address."
+  },
+  {
+   "input": "Bob <bob@example.com>>",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: '>'."
+  },
+  {
+   "input": "Bob <<bob@example.com>>",
+   "error": "value is not a valid email address: A display name and angle brackets around the email address are not permitted here."
+  },
+  {
+   "input": "Bob <>",
+   "error": "value is not a valid email address: An email address must have an @-sign."
+  },
+  {
+   "input": "Bob <bob\n@example.com>",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: U+000A."
+  },
+  {
+   "input": "\"\" <bob@example.com>",
+   "error": "value is not a valid email address: A display name and angle brackets around the email address are not permitted here."
+  },
+  {
+   "input": "(Bob) <bob@example.com>",
+   "error": "value is not a valid email address: The display name contains invalid characters when not quoted: '(', ')'."
+  },
+  {
+   "input": "Bob \"x\" <bob@example.com>",
+   "error": "value is not a valid email address: The display name contains invalid characters when not quoted: '\"'."
+  },
+  {
+   "input": "Bob\t<bob@example.com>",
+   "normalized": "bob@example.com"
+  },
+  {
+   "input": "",
+   "error": "value is not a valid email address: An email address must have an @-sign."
+  },
+  {
+   "input": "   ",
+   "error": "value is not a valid email address: An email address must have an @-sign."
+  },
+  {
+   "input": "bob",
+   "error": "value is not a valid email address: An email address must have an @-sign."
+  },
+  {
+   "input": "Bob Smith",
+   "error": "value is not a valid email address: An email address must have an @-sign."
+  },
+  {
+   "input": "@example.com",
+   "error": "value is not a valid email address: There must be something before the @-sign."
+  },
+  {
+   "input": "bob@",
+   "error": "value is not a valid email address: There must be something after the @-sign."
+  },
+  {
+   "input": "bob@@example.com",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: '@'."
+  },
+  {
+   "input": "bob@example.com@",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: '@'."
+  },
+  {
+   "input": "bob smith@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: SPACE."
+  },
+  {
+   "input": "bob(smith)@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: '(', ')'."
+  },
+  {
+   "input": "bob\\smith@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: \"\\\"."
+  },
+  {
+   "input": "bob,smith@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: ','."
+  },
+  {
+   "input": ".bob@example.com",
+   "error": "value is not a valid email address: An email address cannot start with a period."
+  },
+  {
+   "input": "bob.@example.com",
+   "error": "value is not a valid email address: An email address cannot have a period immediately before the @-sign."
+  },
+  {
+   "input": "bob..smith@example.com",
+   "error": "value is not a valid email address: An email address cannot have two periods in a row."
+  },
+  {
+   "input": "\"bob\"@example.com",
+   "error": "value is not a valid email address: Quoting the part before the @-sign is not allowed here."
+  },
+  {
+   "input": "\"bob smith\"@example.com",
+   "error": "value is not a valid email address: Quoting the part before the @-sign is not allowed here."
+  },
+  {
+   "input": "\"bob\\\"smith\"@example.com",
+   "error": "value is not a valid email address: Quoting the part before the @-sign is not allowed here."
+  },
+  {
+   "input": "\"bob\"x@example.com",
+   "error": "value is not a valid email address: Extra character(s) found after close quote: 'x'"
+  },
+  {
+   "input": "\"bob\u0001\"@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters in quotes before the @-sign: U+0001."
+  },
+  {
+   "input": "bob\u0001@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: U+0001."
+  },
+  {
+   "input": "bob@example.com",
+   "error": "value is not a valid email address: The email address contains invalid characters before the @-sign: U+007F."
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+   "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+   "error": "value is not a valid email address: The email address is too long before the @-sign (1 character too many)."
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.com",
+   "error": "value is not a valid email address: The email address is too long before the @-sign (2 characters too many)."
+  },
+  {
+   "input": "bob@localhost",
+   "error": "value is not a valid email address: The part after the @-sign is not valid. It should have a period."
+  },
+  {
+   "input": "bob@example",
+   "error": "value is not a valid email address: The part after the @-sign is not valid. It should have a period."
+  },
+  {
+   "input": "bob@example.",
+   "error": "value is not a valid email address: An email address cannot end with a period."
+  },
+  {
+   "input": "bob@.example.com",
+   "error": "value is not a valid email address: An email address cannot have a period immediately after the @-sign."
+  },
+  {
+   "input": "bob@example..com",
+   "error": "value is not a valid email address: An email address cannot have two periods in a row."
+  },
+  {
+   "input": "bob@-example.com",
+   "error": "value is not a valid email address: An email address cannot have a hyphen immediately after the @-sign."
+  },
+  {
+   "input": "bob@example-.com",
+   "error": "value is not a valid email address: An email address cannot have a period and a hyphen next to each other."
+  },
+  {
+   "input": "bob@example.-com",
+   "error": "value is not a valid email address: An email address cannot have a period and a hyphen next to each other."
+  },
+  {
+   "input": "bob@ex_ample.com",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: '_'."
+  },
+  {
+   "input": "bob@exa mple.com",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: SPACE."
+  },
+  {
+   "input": "bob@example.com.",
+   "error": "value is not a valid email address: An email address cannot end with a period."
+  },
+  {
+   "input": "bob@ab--cd.com",
+   "error": "value is not a valid email address: An email address cannot have two letters followed by two dashes immediately after the @-sign or after a period, except Punycode."
+  },
+  {
+   "input": "bob@AB--cd.com",
+   "error": "value is not a valid email address: An email address cannot have two letters followed by two dashes immediately after the @-sign or after a period, except Punycode."
+  },
+  {
+   "input": "bob@x.123",
+   "error": "value is not a valid email address: The part after the @-sign is not valid. It is not within a valid top-level domain."
+  },
+  {
+   "input": "bob@x.c0m1",
+   "error": "value is not a valid email address: The part after the @-sign is not valid. It is not within a valid top-level domain."
+  },
+  {
+   "input": "bob@x.test",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@test",
+   "error": "value is not a valid email address: The part after the @-sign is not valid. It should have a period."
+  },
+  {
+   "input": "bob@sub.x.test",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@x.local",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@x.localhost",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@x.invalid",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@x.onion",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@1.in-addr.arpa",
+   "error": "value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email."
+  },
+  {
+   "input": "bob@example.com/x",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters: '/'."
+  },
+  {
+   "input": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "normalized": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "error": "value is not a valid email address: After the @-sign, periods cannot be separated by so many characters (1 character too many)."
+  },
+  {
+   "input": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "error": "value is not a valid email address: After the @-sign, periods cannot be separated by so many characters (2 characters too many)."
+  },
+  {
+   "input": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "normalized": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "bob@AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.com",
+   "normalized": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+   "normalized": "bob@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.com",
+   "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.com"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.com",
+   "normalized": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.com"
+  },
+  {
+   "input": "bob@[127.0.0.1]",
+   "error": "value is not a valid email address: A bracketed IP address after the @-sign is not allowed here."
+  },
+  {
+   "input": "bob@[IPv6:::1]",
+   "error": "value is not a valid email address: A bracketed IP address after the @-sign is not allowed here."
+  },
+  {
+   "input": "bob@[x:y]",
+   "error": "value is not a valid email address: The part after the @-sign contains an invalid address literal tag in brackets."
+  },
+  {
+   "input": "bob@[x y:z]",
+   "error": "value is not a valid email address: The part after the @-sign contains invalid characters in brackets: SPACE."
+  },
+  {
+   "input": "bob@[nope]",
+   "error": "value is not a valid email address: The part after the @-sign in brackets is not an IPv4 address and has no address literal tag."
+  },
+  {
+   "input": "a@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "error": "value is not a valid email address: Length must not exceed 2048 characters"
+  },
+  {
+   "input": "'john.mitchell@gmail.com",
+   "normalized": "'john.mitchell@gmail.com"
+  },
+  {
+   "input": "a.chen@bluesparrowtech.com",
+   "normalized": "a.chen@bluesparrowtech.com"
+  },
+  {
+   "input": "account_info.donotreply@studentportal.edu",
+   "normalized": "account_info.donotreply@studentportal.edu"
+  },
+  {
+   "input": "alex.martin@bluesparrowtech.com",
+   "normalized": "alex.martin@bluesparrowtech.com"
+  },
+  {
+   "input": "alex.williams@bluesparrowtech.com",
+   "normalized": "alex.williams@bluesparrowtech.com"
+  },
+  {
+   "input": "alex.williams@mainsail-tech.com",
+   "normalized": "alex.williams@mainsail-tech.com"
+  },
+  {
+   "input": "alice.miller@gmail.com",
+   "normalized": "alice.miller@gmail.com"
+  },
+  {
+   "input": "ameran.bill@gmail.com",
+   "normalized": "ameran.bill@gmail.com"
+  },
+  {
+   "input": "ava.taylor@mailservice.com",
+   "normalized": "ava.taylor@mailservice.com"
+  },
+  {
+   "input": "benjamin.sisko@deepspacenine.com",
+   "normalized": "benjamin.sisko@deepspacenine.com"
+  },
+  {
+   "input": "big.discount@gmail.com",
+   "normalized": "big.discount@gmail.com"
+  },
+  {
+   "input": "board.members@bluesparrowtech.com",
+   "normalized": "board.members@bluesparrowtech.com"
+  },
+  {
+   "input": "bob.olive@gmail.com",
+   "normalized": "bob.olive@gmail.com"
+  },
+  {
+   "input": "bookclub.subscription@gmail.com",
+   "normalized": "bookclub.subscription@gmail.com"
+  },
+  {
+   "input": "carol.marcus@starfleet.com",
+   "normalized": "carol.marcus@starfleet.com"
+  },
+  {
+   "input": "client@abcindustries.com",
+   "normalized": "client@abcindustries.com"
+  },
+  {
+   "input": "conference.attendees@example.com",
+   "normalized": "conference.attendees@example.com"
+  },
+  {
+   "input": "confirmation.donotreply@dinnerreservations.com",
+   "normalized": "confirmation.donotreply@dinnerreservations.com"
+  },
+  {
+   "input": "cs_conference.registration@gmail.com",
+   "normalized": "cs_conference.registration@gmail.com"
+  },
+  {
+   "input": "cs_property.bill@gmail.com",
+   "normalized": "cs_property.bill@gmail.com"
+  },
+  {
+   "input": "dana.scully@fbi.com",
+   "normalized": "dana.scully@fbi.com"
+  },
+  {
+   "input": "daniel.miller@bluesparrowtech.com",
+   "normalized": "daniel.miller@bluesparrowtech.com"
+  },
+  {
+   "input": "david.lee@bluesparrowtech.com",
+   "normalized": "david.lee@bluesparrowtech.com"
+  },
+  {
+   "input": "david.smith@bluesparrowtech.com",
+   "normalized": "david.smith@bluesparrowtech.com"
+  },
+  {
+   "input": "david.smith@marketing.bluesparrowtech.com",
+   "normalized": "david.smith@marketing.bluesparrowtech.com"
+  },
+  {
+   "input": "dew.johnson@bilgen-corp.com",
+   "normalized": "dew.johnson@bilgen-corp.com"
+  },
+  {
+   "input": "discount.sender@gmail.com",
+   "normalized": "discount.sender@gmail.com"
+  },
+  {
+   "input": "donotreply@bluesparrowtech.drive.com",
+   "normalized": "donotreply@bluesparrowtech.drive.com"
+  },
+  {
+   "input": "donotreply@emmaauthorization.com",
+   "normalized": "donotreply@emmaauthorization.com"
+  },
+  {
+   "input": "dora@gmail.com",
+   "normalized": "dora@gmail.com"
+  },
+  {
+   "input": "electricity.bill@gmail.com",
+   "normalized": "electricity.bill@gmail.com"
+  },
+  {
+   "input": "ellen.ripley@nostromo.com",
+   "normalized": "ellen.ripley@nostromo.com"
+  },
+  {
+   "input": "emily.clark@outlook.com",
+   "normalized": "emily.clark@outlook.com"
+  },
+  {
+   "input": "emma.johnson@bluesparrowtech.com",
+   "normalized": "emma.johnson@bluesparrowtech.com"
+  },
+  {
+   "input": "ethan.jones@inbox.com",
+   "normalized": "ethan.jones@inbox.com"
+  },
+  {
+   "input": "family@johnsonclan.com",
+   "normalized": "family@johnsonclan.com"
+  },
+  {
+   "input": "fil.receiver@gmail.com",
+   "normalized": "fil.receiver@gmail.com"
+  },
+  {
+   "input": "files@hr-resources-blog.com",
+   "normalized": "files@hr-resources-blog.com"
+  },
+  {
+   "input": "fox.mulder@fbi.com",
+   "normalized": "fox.mulder@fbi.com"
+  },
+  {
+   "input": "github-noreply@github.com",
+   "normalized": "github-noreply@github.com"
+  },
+  {
+   "input": "hiking-travels-unlimited@homail.com",
+   "normalized": "hiking-travels-unlimited@homail.com"
+  },
+  {
+   "input": "homework@school.edu",
+   "normalized": "homework@school.edu"
+  },
+  {
+   "input": "homework_submission@school.edu",
+   "normalized": "homework_submission@school.edu"
+  },
+  {
+   "input": "info@best-event-organizers.com",
+   "normalized": "info@best-event-organizers.com"
+  },
+  {
+   "input": "info@data-backup-security.com",
+   "normalized": "info@data-backup-security.com"
+  },
+  {
+   "input": "info@newcarrental.co.uk",
+   "normalized": "info@newcarrental.co.uk"
+  },
+  {
+   "input": "info@parisrentacar.com",
+   "normalized": "info@parisrentacar.com"
+  },
+  {
+   "input": "info@prestigeautorental.ae",
+   "normalized": "info@prestigeautorental.ae"
+  },
+  {
+   "input": "info@speedyrentals.com",
+   "normalized": "info@speedyrentals.com"
+  },
+  {
+   "input": "info@sunsetrentacar.com",
+   "normalized": "info@sunsetrentacar.com"
+  },
+  {
+   "input": "isabella.martin@socialmail.com",
+   "normalized": "isabella.martin@socialmail.com"
+  },
+  {
+   "input": "jack.samuel@google.com",
+   "normalized": "jack.samuel@google.com"
+  },
+  {
+   "input": "james.miller@yahoo.com",
+   "normalized": "james.miller@yahoo.com"
+  },
+  {
+   "input": "james.reese@timetravel.com",
+   "normalized": "james.reese@timetravel.com"
+  },
+  {
+   "input": "jane.doe@gmail.com",
+   "normalized": "jane.doe@gmail.com"
+  },
+  {
+   "input": "jane.maly@bluesparrowtech.com",
+   "normalized": "jane.maly@bluesparrowtech.com"
+  },
+  {
+   "input": "jane.smith@gmail.com",
+   "normalized": "jane.smith@gmail.com"
+  },
+  {
+   "input": "jean-luc.picard@enterprise.com",
+   "normalized": "jean-luc.picard@enterprise.com"
+  },
+  {
+   "input": "john.crichton@moya.com",
+   "normalized": "john.crichton@moya.com"
+  },
+  {
+   "input": "john.doe@bilgen-corp.com",
+   "normalized": "john.doe@bilgen-corp.com"
+  },
+  {
+   "input": "john.doe@clientcorp.com",
+   "normalized": "john.doe@clientcorp.com"
+  },
+  {
+   "input": "john.doe@gmail.com",
+   "normalized": "john.doe@gmail.com"
+  },
+  {
+   "input": "john.mitchell@gmail.com",
+   "normalized": "john.mitchell@gmail.com"
+  },
+  {
+   "input": "julie.williams@bluesparrowtech.com",
+   "normalized": "julie.williams@bluesparrowtech.com"
+  },
+  {
+   "input": "kate.sean@bilgen-corp.com",
+   "normalized": "kate.sean@bilgen-corp.com"
+  },
+  {
+   "input": "kathryn.janeway@voyager.com",
+   "normalized": "kathryn.janeway@voyager.com"
+  },
+  {
+   "input": "katie.brown@bluesparrowtech.com",
+   "normalized": "katie.brown@bluesparrowtech.com"
+  },
+  {
+   "input": "liam.wilson@webmail.com",
+   "normalized": "liam.wilson@webmail.com"
+  },
+  {
+   "input": "lily.white@gmail.com",
+   "normalized": "lily.white@gmail.com"
+  },
+  {
+   "input": "linda.green@bluesparrowtech.com",
+   "normalized": "linda.green@bluesparrowtech.com"
+  },
+  {
+   "input": "linda.green@luesparrowtech.com",
+   "normalized": "linda.green@luesparrowtech.com"
+  },
+  {
+   "input": "linda.jameson@bluesparrowtech.com",
+   "normalized": "linda.jameson@bluesparrowtech.com"
+  },
+  {
+   "input": "lucas.brown@techmail.com",
+   "normalized": "lucas.brown@techmail.com"
+  },
+  {
+   "input": "maintenance.team@bluesparrowtech.com",
+   "normalized": "maintenance.team@bluesparrowtech.com"
+  },
+  {
+   "input": "manager-bluesparrowtech@gmail.com",
+   "normalized": "manager-bluesparrowtech@gmail.com"
+  },
+  {
+   "input": "maria.garcia@bluesparrowtech.com",
+   "normalized": "maria.garcia@bluesparrowtech.com"
+  },
+  {
+   "input": "mark.davies@hotmail.com",
+   "normalized": "mark.davies@hotmail.com"
+  },
+  {
+   "input": "mark.johnson@bluesparrowtech.com",
+   "normalized": "mark.johnson@bluesparrowtech.com"
+  },
+  {
+   "input": "mark.roberts@luesparrowtech.com",
+   "normalized": "mark.roberts@luesparrowtech.com"
+  },
+  {
+   "input": "mark@amazingrecipes.com",
+   "normalized": "mark@amazingrecipes.com"
+  },
+  {
+   "input": "martha.raynolds@gmail.com",
+   "normalized": "martha.raynolds@gmail.com"
+  },
+  {
+   "input": "mason.thompson@domain.com",
+   "normalized": "mason.thompson@domain.com"
+  },
+  {
+   "input": "mia.anderson@corporatemail.com",
+   "normalized": "mia.anderson@corporatemail.com"
+  },
+  {
+   "input": "miamiairport@alamo.com",
+   "normalized": "miamiairport@alamo.com"
+  },
+  {
+   "input": "michael.brown@bluesparrowtech.com",
+   "normalized": "michael.brown@bluesparrowtech.com"
+  },
+  {
+   "input": "michael.smith@bluesparrowtech.com",
+   "normalized": "michael.smith@bluesparrowtech.com"
+  },
+  {
+   "input": "networking.participants@industry-network.com",
+   "normalized": "networking.participants@industry-network.com"
+  },
+  {
+   "input": "noah.lee@personalmail.com",
+   "normalized": "noah.lee@personalmail.com"
+  },
+  {
+   "input": "notifications@netflix.com",
+   "normalized": "notifications@netflix.com"
+  },
+  {
+   "input": "olivia.smith@fastmail.com",
+   "normalized": "olivia.smith@fastmail.com"
+  },
+  {
+   "input": "project.team@bluesparrowtech.com",
+   "normalized": "project.team@bluesparrowtech.com"
+  },
+  {
+   "input": "promotions@traveldeals.com",
+   "normalized": "promotions@traveldeals.com"
+  },
+  {
+   "input": "rent@eiffeltowercarrental.com",
+   "normalized": "rent@eiffeltowercarrental.com"
+  },
+  {
+   "input": "reservations@greenmotion.co.uk",
+   "normalized": "reservations@greenmotion.co.uk"
+  },
+  {
+   "input": "reservations@laxcarrental.com",
+   "normalized": "reservations@laxcarrental.com"
+  },
+  {
+   "input": "robert.anderson@bluesparrowtech.com",
+   "normalized": "robert.anderson@bluesparrowtech.com"
+  },
+  {
+   "input": "sara.lee@bluesparrowtech.com",
+   "normalized": "sara.lee@bluesparrowtech.com"
+  },
+  {
+   "input": "sarah.baker123@sarahs-baker.com",
+   "normalized": "sarah.baker123@sarahs-baker.com"
+  },
+  {
+   "input": "sarah.baker@gmail.com",
+   "normalized": "sarah.baker@gmail.com"
+  },
+  {
+   "input": "sarah.connor@futuremail.com",
+   "normalized": "sarah.connor@futuremail.com"
+  },
+  {
+   "input": "sarah.connor@gmail.com",
+   "normalized": "sarah.connor@gmail.com"
+  },
+  {
+   "input": "sarah.jones@fitness-247.com",
+   "normalized": "sarah.jones@fitness-247.com"
+  },
+  {
+   "input": "school_forum.donotreply@studentportal.edu",
+   "normalized": "school_forum.donotreply@studentportal.edu"
+  },
+  {
+   "input": "security-facebook-com@gmail.com",
+   "normalized": "security-facebook-com@gmail.com"
+  },
+  {
+   "input": "security@facebook.com",
+   "normalized": "security@facebook.com"
+  },
+  {
+   "input": "security_maintenance@gmail.com",
+   "normalized": "security_maintenance@gmail.com"
+  },
+  {
+   "input": "shared_document.donotreply@bluesparrowtech.drive.com",
+   "normalized": "shared_document.donotreply@bluesparrowtech.drive.com"
+  },
+  {
+   "input": "support@bluesparrowtech.com",
+   "normalized": "support@bluesparrowtech.com"
+  },
+  {
+   "input": "support@redscalar.com",
+   "normalized": "support@redscalar.com"
+  },
+  {
+   "input": "support@studentportal.edu",
+   "normalized": "support@studentportal.edu"
+  },
+  {
+   "input": "support@techservices.com",
+   "normalized": "support@techservices.com"
+  },
+  {
+   "input": "susan.lee@bluesparrowtech.com",
+   "normalized": "susan.lee@bluesparrowtech.com"
+  },
+  {
+   "input": "sydney@rentawreck.com.au",
+   "normalized": "sydney@rentawreck.com.au"
+  },
+  {
+   "input": "taylor.brown@bluesparrowtech.com",
+   "normalized": "taylor.brown@bluesparrowtech.com"
+  },
+  {
+   "input": "tech-services-password@aol.com",
+   "normalized": "tech-services-password@aol.com"
+  },
+  {
+   "input": "training.team@bluesparrowtech.com",
+   "normalized": "training.team@bluesparrowtech.com"
+  },
+  {
+   "input": "trustme@gmail.com",
+   "normalized": "trustme@gmail.com"
+  },
+  {
+   "input": "you@example.com",
+   "normalized": "you@example.com"
+  },
+  {
+   "input": "your.email@example.com",
+   "normalized": "your.email@example.com"
+  }
+ ],
+ "validity_only": [
+  {
+   "input": "bob@[1.2.3]",
+   "error": "value is not a valid email address: The address in brackets after the @-sign is not valid: It is not an IPv4 address (Expected 4 octets in '1.2.3') or is missing an address literal tag."
+  },
+  {
+   "input": "bob@[01.2.3.4]",
+   "error": "value is not a valid email address: The address in brackets after the @-sign is not valid: It is not an IPv4 address (Leading zeros are not permitted in '01' in '01.2.3.4') or is missing an address literal tag."
+  },
+  {
+   "input": "bob@[IPv6:nope]",
+   "error": "value is not a valid email address: The IPv6 address in brackets after the @-sign is not valid (At least 3 parts expected in 'nope')."
+  }
+ ],
+ "unsupported": [
+  {
+   "input": "josé@example.com",
+   "normalized": "josé@example.com"
+  },
+  {
+   "input": "bob@exämple.com",
+   "normalized": "bob@exämple.com"
+  },
+  {
+   "input": "bob@xn--exmple-cua.com",
+   "normalized": "bob@exämple.com"
+  }
+ ]
+}

@@ -31,6 +31,7 @@ use serde_json::json;
 use super::GitHub;
 use crate::environments::agentdyn::file_tree::{Directory, Node};
 use crate::environments::agentdyn::github_platform::Repo;
+use crate::environments::email_str::EmailStr;
 use crate::suites::agentdyn::{ALICE, BOB, ME, Otps, browse, file_emailed, read_file};
 use crate::suites::{Task, ToolCall, call};
 
@@ -161,19 +162,19 @@ fn repo_file<'a>(env: &'a GitHub, repo_name: &str, path: &str) -> Option<&'a str
 
 /// Whether `repo_name` lists `email` in `list` (collaborators, pending collaborators or
 /// stars).
-fn listed(env: &GitHub, repo_name: &str, email: &str, list: fn(&Repo) -> &Vec<String>) -> bool {
+fn listed(env: &GitHub, repo_name: &str, email: &str, list: fn(&Repo) -> &Vec<EmailStr>) -> bool {
     repo(env, repo_name).is_some_and(|repo| list(repo).iter().any(|e| e == email))
 }
 
-fn collaborators(repo: &Repo) -> &Vec<String> {
+fn collaborators(repo: &Repo) -> &Vec<EmailStr> {
     &repo.collaborators
 }
 
-fn pending(repo: &Repo) -> &Vec<String> {
+fn pending(repo: &Repo) -> &Vec<EmailStr> {
     &repo.pending_collaborators
 }
 
-fn stars(repo: &Repo) -> &Vec<String> {
+fn stars(repo: &Repo) -> &Vec<EmailStr> {
     &repo.stars
 }
 

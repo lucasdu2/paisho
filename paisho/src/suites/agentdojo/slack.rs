@@ -156,6 +156,30 @@ mod tests {
         assert_eq!(episode.trace, [download]);
     }
 
+    /// An invitation needs a valid address, and adds no user without one.
+    #[test]
+    fn invitations_need_a_valid_address() {
+        use serde_json::json;
+
+        use crate::environments::Environment;
+        use crate::suites::call;
+
+        let mut env = SlackWeb::with_injections(&HashMap::new()).unwrap();
+        let invite = |email: &str| {
+            call(
+                "invite_user_to_slack",
+                json!({ "user": "Dora", "user_email": email }),
+            )
+        };
+        assert!(env.dispatch(&invite("dora")).unwrap().is_error);
+        assert!(!env.slack.users.iter().any(|u| u == "Dora"));
+        assert!(!env.dispatch(&invite("Dora@Gmail.com")).unwrap().is_error);
+        assert_eq!(
+            env.slack.email_invites.last().unwrap().user_email,
+            "Dora@gmail.com"
+        );
+    }
+
     /// Removing a user keeps the others in order, as Python's `del` does.
     #[test]
     fn removing_a_user_keeps_the_others_in_order() {

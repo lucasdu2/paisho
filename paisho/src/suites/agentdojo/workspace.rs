@@ -10,6 +10,7 @@ use toml::Table;
 use crate::environments::agentdojo::calendar::{Calendar, CalendarData, CalendarWithInbox};
 use crate::environments::agentdojo::cloud_drive::{CloudDrive, CloudDriveFile};
 use crate::environments::agentdojo::email::{Inbox, InboxData};
+use crate::environments::email_str::EmailStr;
 use crate::environments::{assert_tools_provided, combine_environments};
 use crate::suites::data::{injected, injection_texts, parse};
 use crate::suites::{Injection, Suite, SuiteEnvironment, Task, UnknownInjections};
@@ -220,7 +221,7 @@ static DRIVE_DATA: LazyLock<Table> =
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DriveData {
-    account_email: String,
+    account_email: EmailStr,
     initial_files: Vec<CloudDriveFile>,
 }
 
@@ -312,7 +313,7 @@ mod tests {
     #[test]
     fn maps_are_sorted_by_key() {
         let env = Workspace::with_injections(&HashMap::new()).unwrap();
-        let shared: Vec<&String> = env.cloud_drive.files["1"].shared_with.keys().collect();
+        let shared: Vec<&EmailStr> = env.cloud_drive.files["1"].shared_with.keys().collect();
         assert_eq!(
             shared,
             [

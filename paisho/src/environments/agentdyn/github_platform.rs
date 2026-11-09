@@ -22,6 +22,7 @@ use crate::environments::agentdyn::file_tree::{
     Directory, File, FileTree, Node, Permissions, segments,
 };
 use crate::environments::agentdyn::web_database::{InvitationAction, WebAction, WebDatabase};
+use crate::environments::email_str::{EmailStr, Validation};
 
 /// One comment of an issue.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
@@ -60,7 +61,7 @@ pub(crate) enum PendingAction {
     },
     InviteCollaborator {
         repo_name: String,
-        collaborator_email: String,
+        collaborator_email: EmailStr,
     },
     GetSshKeys,
     AddSshKey {
@@ -76,7 +77,7 @@ pub(crate) enum PendingAction {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Account {
-    pub(crate) email: String,
+    pub(crate) email: EmailStr,
     pub(crate) username: String,
     pub(crate) password: String,
     /// The account's repositories, by name without the owner.
@@ -101,13 +102,13 @@ pub(crate) struct Repo {
     pub(crate) owner: String,
     /// Collaborators' email addresses.
     #[serde(default)]
-    pub(crate) collaborators: Vec<String>,
+    pub(crate) collaborators: Vec<EmailStr>,
     /// The email addresses invited but not yet accepted.
     #[serde(default)]
-    pub(crate) pending_collaborators: Vec<String>,
+    pub(crate) pending_collaborators: Vec<EmailStr>,
     /// The email addresses of the accounts that starred the repository.
     #[serde(default)]
-    pub(crate) stars: Vec<String>,
+    pub(crate) stars: Vec<EmailStr>,
     #[serde(
         default = "Directory::new",
         deserialize_with = "directory_node",
@@ -145,7 +146,7 @@ pub(crate) struct GitHubPlatform {
     pub(crate) repository_list: IndexMap<String, Repo>,
     /// The email address of the account the user is logged in to.
     #[serde(default)]
-    pub(crate) current_account_email: Option<String>,
+    pub(crate) current_account_email: Option<EmailStr>,
     #[serde(default)]
     pub(crate) otp_generator: OtpGenerator,
 }
@@ -189,10 +190,10 @@ fn file_tree(directory: &Directory) -> IndexMap<String, TreeEntry> {
 pub(crate) struct RepositoryInformation {
     name: String,
     owner: String,
-    collaborators: Vec<String>,
+    collaborators: Vec<EmailStr>,
     #[serde(rename = "pending collaborators")]
-    pending_collaborators: Vec<String>,
-    stars: Vec<String>,
+    pending_collaborators: Vec<EmailStr>,
+    stars: Vec<EmailStr>,
     #[serde(rename = "repository file tree")]
     file_tree: IndexMap<String, TreeEntry>,
     issues: Vec<Issue>,
@@ -200,7 +201,7 @@ pub(crate) struct RepositoryInformation {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, schemars::JsonSchema)]
 pub(crate) struct UserInformation {
-    email: String,
+    email: EmailStr,
     username: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
@@ -439,7 +440,7 @@ impl GitHubPlatform {
     pub(crate) fn accept_invitation(
         &mut self,
         repo_name: &str,
-        email: &str,
+        email: &EmailStr,
     ) -> Result<String, String> {
         let Some(repo) = self.repository_list.get_mut(repo_name) else {
             return Err(format!(
@@ -449,7 +450,7 @@ impl GitHubPlatform {
         if repo.collaborators.iter().any(|c| c == email) {
             return Ok("You have already been a collaborator.".to_string());
         }
-        repo.collaborators.push(email.to_string());
+        repo.collaborators.push(email.clone());
         repo.pending_collaborators.retain(|c| c != email);
         Ok(format!(
             "You have successfully accepted the invitation to become a collaborator of \
@@ -819,7 +820,7 @@ impl GitHubWithLinkedInbox<'_> {
                 );
                 self.email_database.deliver(
                     GITHUB_SENDER,
-                    vec![collaborator_email.clone()],
+                    vec![collaborator_email.to_string()],
                     &format!("Github Collaborator Invitation for Repository {repo_name}"),
                     &letter,
                     Vec::new(),
@@ -947,9 +948,15 @@ impl GitHubWithLinkedInbox<'_> {
         #[describe = "Name of the repository to add a collaborator to"] repo_name: &str,
         #[describe = "Email address of the user to invite"] collaborator_email: &str,
     ) -> Result<String, String> {
+        // AgentDyn types the argument `EmailStr`, so pydantic validates and normalizes it
+        // before the tool runs, and an invalid address fails before an OTP is sent.
+        let collaborator_email =
+            Validation::run("Input schema for `git_invite_collaborators`", |v| {
+                v.field("collaborator_email", collaborator_email)
+            })?;
         let action = PendingAction::InviteCollaborator {
             repo_name: repo_name.to_string(),
-            collaborator_email: collaborator_email.to_string(),
+            collaborator_email,
         };
         self.run(action, false)
     }
