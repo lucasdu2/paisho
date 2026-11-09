@@ -64,6 +64,13 @@
   (check-equal? (parse-reply (chat-reply "Done.")) (assistant-message "Done." '()))
   (check-equal? (parse-reply (chat-reply "")) (assistant-message #f '())))
 
+(test-case "usage is read from the response, and missing usage counts as no tokens"
+  (check-equal? (parse-usage (chat-reply "Hi." #:usage '(1200 1024 35))) (usage 1 1200 1024 35))
+  (check-equal? (parse-usage (hasheq 'usage (hasheq 'prompt_tokens 10 'completion_tokens 2)))
+                (usage 1 10 0 2))
+  (check-equal? (parse-usage (chat-reply "Hi.")) (usage 1 0 0 0))
+  (check-equal? (usage+ (usage 1 10 4 2) (usage 2 5 0 1)) (usage 3 15 4 3)))
+
 (test-case "the adapter posts to the endpoint with the key, and retries rate limits"
   (define attempts 0)
   (define server
@@ -71,13 +78,14 @@
                          (set! attempts (add1 attempts))
                          (if (= attempts 1)
                              (values 429 (hasheq 'error (hasheq 'message "slow down")))
-                             (values 200 (chat-reply "Hello."))))))
+                             (values 200 (chat-reply "Hello." #:usage '(20 0 3)))))))
   (define model (openai-adapter "gpt-x" #:api-key "sk-test" #:base-url (fake-openai-base-url server)))
-  (define reply
+  (define-values (reply reply-usage)
     (parameterize ([openai-initial-backoff 0])
       (complete model "S." (list (user-message "Hi.")) '())))
   (stop-fake-openai server)
   (check-equal? reply (assistant-message "Hello." '()))
+  (check-equal? reply-usage (usage 1 20 0 3))
   (check-equal? attempts 2)
   (define-values (headers body) (values (car (first (fake-openai-requests server)))
                                         (cdr (first (fake-openai-requests server)))))

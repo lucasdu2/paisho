@@ -5,3 +5,6 @@ compiled/
 doc/
 
 .env
+
+# Token usage logs written by main.rkt (one JSON line per episode run).
+usage/

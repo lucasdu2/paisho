@@ -8,6 +8,10 @@
          (struct-out user-message)
          (struct-out assistant-message)
          (struct-out tool-message)
+         (struct-out usage)
+         no-usage
+         usage+
+         usage->jsexpr
          (struct-out adapter)
          complete)
 
@@ -27,9 +31,29 @@
 ;; The result of the tool call `call-id`: its text, or the error text if `error?`.
 (struct tool-message (call-id name text error?) #:transparent)
 
+;; The tokens model calls used, as the provider reported them. `cached-input` is the part of
+;; `input` the provider served from its prompt cache (billed at a lower rate by most), and
+;; `calls` is how many calls the counts cover. A call whose provider reported no usage
+;; counts in `calls` but adds no tokens.
+(struct usage (calls input cached-input output) #:transparent)
+
+(define no-usage (usage 0 0 0 0))
+
+(define (usage+ a b)
+  (usage (+ (usage-calls a) (usage-calls b))
+         (+ (usage-input a) (usage-input b))
+         (+ (usage-cached-input a) (usage-cached-input b))
+         (+ (usage-output a) (usage-output b))))
+
+(define (usage->jsexpr u)
+  (hasheq 'calls (usage-calls u)
+          'input_tokens (usage-input u)
+          'cached_input_tokens (usage-cached-input u)
+          'output_tokens (usage-output u)))
+
 ;; A model behind some provider. `complete-proc` takes the system prompt, the conversation
-;; (a list of the message structs above, oldest first) and the tools, and returns the
-;; model's reply as an `assistant-message`.
+;; (a list of the message structs above, oldest first) and the tools, and returns two
+;; values: the model's reply as an `assistant-message`, and the call's `usage`.
 (struct adapter (name complete-proc))
 
 (define (complete adapter system messages tools)

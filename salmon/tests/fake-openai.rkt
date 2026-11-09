@@ -54,8 +54,9 @@
   (tcp-close (fake-openai-listener server)))
 
 ;; A successful Chat Completions response with `content` (or #f) and `tool-calls`, each a
-;; list of id, name and arguments (a jsexpr, or a string sent as is).
-(define (chat-reply content . tool-calls)
+;; list of id, name and arguments (a jsexpr, or a string sent as is). With `usage`, a list of
+;; prompt, cached and completion tokens, the response reports that usage.
+(define (chat-reply #:usage [usage #f] content . tool-calls)
   (define message
     (hasheq 'role "assistant"
             'content (or content (json-null))
@@ -69,4 +70,10 @@
                                                                      (if (string? arguments)
                                                                          arguments
                                                                          (jsexpr->string arguments)))))))))
-  (hasheq 'choices (list (hasheq 'index 0 'message message 'finish_reason "stop"))))
+  (define response (hasheq 'choices (list (hasheq 'index 0 'message message 'finish_reason "stop"))))
+  (if usage
+      (hash-set response 'usage (hasheq 'prompt_tokens (car usage)
+                                        'prompt_tokens_details (hasheq 'cached_tokens (cadr usage))
+                                        'completion_tokens (caddr usage)
+                                        'total_tokens (+ (car usage) (caddr usage))))
+      response))

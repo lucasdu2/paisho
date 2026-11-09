@@ -15,7 +15,8 @@
          openai-initial-backoff
          ;; Exposed for tests.
          request-body
-         parse-reply)
+         parse-reply
+         parse-usage)
 
 ;; Which statuses and how many times to retry, with exponential backoff starting at
 ;; `(openai-initial-backoff)` seconds: rate limits and server errors.
@@ -36,12 +37,13 @@
   (adapter
    model
    (lambda (system messages tools)
-     (parse-reply
-      (post-json endpoint
-                 api-key
-                 (request-body model system messages tools
-                               #:temperature temperature
-                               #:system-role system-role))))))
+     (define response
+       (post-json endpoint
+                  api-key
+                  (request-body model system messages tools
+                                #:temperature temperature
+                                #:system-role system-role)))
+     (values (parse-reply response) (parse-usage response)))))
 
 ;; The Chat Completions request for the conversation.
 (define (request-body model system messages tools
@@ -113,6 +115,19 @@
                 (with-handlers ([exn:fail? (lambda (_) raw)])
                   (let ([parsed (if (string=? (string-trim raw) "") (hasheq) (string->jsexpr raw))])
                     (if (hash? parsed) parsed raw)))))))
+
+;; The one call's usage in a Chat Completions response. Services that leave out `usage` (or
+;; its cached-token details) count as having used no tokens. Reasoning tokens are part of
+;; `completion_tokens`, so they count as output.
+(define (parse-usage response)
+  (define (count table key)
+    (define n (and (hash? table) (hash-ref table key #f)))
+    (if (exact-nonnegative-integer? n) n 0))
+  (define u (hash-ref response 'usage #f))
+  (usage 1
+         (count u 'prompt_tokens)
+         (count (and (hash? u) (hash-ref u 'prompt_tokens_details #f)) 'cached_tokens)
+         (count u 'completion_tokens)))
 
 ;; POSTs `body` to `endpoint` and returns the response's JSON, retrying rate limits, server
 ;; errors and connection failures.

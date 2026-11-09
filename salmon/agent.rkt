@@ -64,10 +64,13 @@
            (result text (hash-ref tool-result 'isError #f))))]))
 
 ;; Runs the model on `prompt` with `tools` on `conn`'s episode, returning the conversation
-;; (oldest first).
-(define (run-agent model conn prompt tools #:system [system default-system-prompt])
+;; (oldest first). Calls `on-usage` with each model call's `usage` as soon as it returns.
+(define (run-agent model conn prompt tools
+                   #:system [system default-system-prompt]
+                   #:on-usage [on-usage void])
   (let loop ([messages (list (user-message prompt))] [round 0])
-    (define reply (complete model system messages tools))
+    (define-values (reply call-usage) (complete model system messages tools))
+    (on-usage call-usage)
     (define conversation (append messages (list reply)))
     (define calls (assistant-message-tool-calls reply))
     (if (or (null? calls) (>= round max-rounds))
@@ -85,9 +88,11 @@
 
 ;; Runs one episode on `conn` (whose fields `episode` holds, as in a benchmark's `pending`
 ;; list) and returns paisho's `finished` response and the conversation of the last attempt.
+;; `on-usage` is called with each model call's `usage`, as in `run-agent`.
 (define (run-episode model conn episode
                      #:benchmark [benchmark #f]
-                     #:system [system default-system-prompt])
+                     #:system [system default-system-prompt]
+                     #:on-usage [on-usage void])
   (define started
     (paisho-request conn (let ([start (hash-set episode 'type "start")])
                            (if benchmark (hash-set start 'benchmark benchmark) start))))
@@ -99,7 +104,7 @@
     (for/fold ([conversation '()] [output #f])
               ([_ (in-range max-attempts)]
                #:break output)
-      (define conversation (run-agent model conn prompt tools #:system system))
+      (define conversation (run-agent model conn prompt tools #:system system #:on-usage on-usage))
       (values conversation (final-output conversation))))
   (values (paisho-request conn (hasheq 'type "finish" 'output (or output "")))
           conversation))

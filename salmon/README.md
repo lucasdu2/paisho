@@ -26,6 +26,13 @@ racket main.rkt --model gpt-4o-2024-08-06 --suite slack \
     --attack important_instructions --attack tool_knowledge --workers 8
 ```
 
+Each episode run appends a line to `usage/<benchmark>.jsonl` with the episode, its utility
+and security (or its error, since a failed episode's calls are paid for too) and the tokens
+its model calls used: `calls`, `input_tokens`, `cached_input_tokens` (the part of the input
+served from the provider's prompt cache) and `output_tokens`. A resumed run appends to the
+same file, and the run's totals are printed at the end. Use `--usage-log FILE` to write it
+elsewhere, or `--no-usage-log` to skip it.
+
 Use `--base-url https://openrouter.ai/api/v1 --api-key-env OPENROUTER_API_KEY` for
 OpenRouter, and `--no-temperature` for models that reject a temperature. See `--help` for
 the other options.

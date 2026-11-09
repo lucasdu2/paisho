@@ -5,6 +5,7 @@
 
 (require json
          racket/file
+         racket/hash
          racket/list
          racket/os
          racket/runtime-path
@@ -25,10 +26,11 @@
   (values 200
           (case turn
             [(0) (chat-reply #f
+                             #:usage '(100 0 10)
                              (list "1" "get_webpage" (hasheq 'url "www.informations.com"))
                              (list "2" "no_such_tool" (hasheq)))]
-            [(1) (chat-reply #f (list "3" "get_webpage" (hasheq 'url "www.true-informations.com")))]
-            [else (chat-reply "Done.")])))
+            [(1) (chat-reply #f #:usage '(200 100 10) (list "3" "get_webpage" (hasheq 'url "www.true-informations.com")))]
+            [else (chat-reply "Done." #:usage '(300 200 5))])))
 
 (define (with-paisho proc)
   ;; Cargo's output (such as dead-code warnings) is only shown if the build fails.
@@ -57,9 +59,11 @@
      (define fake (start-fake-openai scripted-model))
      (define model (openai-adapter "scripted" #:api-key "unused" #:base-url (fake-openai-base-url fake)))
      (define (selected? episode) (member (hash-ref episode 'task) (list "user_task_0" (json-null))))
+     (define usage-log (build-path logdir "usage" "salmon-test.jsonl"))
      (define-values (finished failed)
        (run-benchmark model
                       #:name "salmon-test"
+                      #:usage-log usage-log
                       #:suites '("slack")
                       #:attacks '("important_instructions")
                       #:socket socket
@@ -79,6 +83,26 @@
      (check-equal? (hash-ref (result "user_task_0" "injection_task_1") 'security) #f)
      (check-equal? (hash-ref (result (json-null) "injection_task_3") 'utility) (json-null))
      (check-equal? (hash-ref (result (json-null) "injection_task_3") 'security) #t)
+
+     ;; Every episode made the scripted model's three calls, and logged them.
+     (define three-calls
+       (hasheq 'calls 3 'input_tokens 600 'cached_input_tokens 300 'output_tokens 25))
+     (check-equal? (hash-ref (result "user_task_0" "injection_task_3") 'usage) three-calls)
+     (define logged (file->lines usage-log))
+     (check-equal? (length logged) 11)
+     (define line
+       (findf (lambda (l) (and (equal? (hash-ref l 'task) "user_task_0")
+                               (equal? (hash-ref l 'injection) "injection_task_3")))
+              (map string->jsexpr logged)))
+     (check-equal? line (hash-union (hasheq 'benchmark "salmon-test"
+                                           'model "scripted"
+                                           'suite "slack"
+                                           'task "user_task_0"
+                                           'attack "important_instructions"
+                                           'injection "injection_task_3"
+                                           'utility #t
+                                           'security #t)
+                                   three-calls))
 
      ;; What the model was sent: paisho's tools, the injected page, and the unknown tool's error.
      (define requests (map cdr (fake-openai-requests fake)))
@@ -131,3 +155,33 @@
      (stop-fake-openai fake)
      (check-equal? failed '())
      (check-equal? (length finished) (+ (* 21 (+ 1 5)) 5)))))
+
+(test-case "a failed episode still logs the calls it made"
+  (with-paisho
+   (lambda (socket logdir)
+     ;; The first call succeeds; the next is rejected, which fails the episode.
+     (define fake
+       (start-fake-openai
+        (lambda (body)
+          (if (null? (filter (lambda (m) (equal? (hash-ref m 'role) "assistant")) (hash-ref body 'messages)))
+              (values 200 (chat-reply #f #:usage '(100 0 10) (list "1" "get_channels" (hasheq))))
+              (values 400 (hasheq 'error (hasheq 'message "bad request")))))))
+     (define model (openai-adapter "scripted" #:api-key "unused" #:base-url (fake-openai-base-url fake)))
+     (define usage-log (build-path logdir "usage.jsonl"))
+     (define-values (finished failed)
+       (run-benchmark model
+                      #:name "salmon-failed"
+                      #:suites '("slack")
+                      #:attacks '()
+                      #:socket socket
+                      #:usage-log usage-log
+                      #:select? (lambda (episode) (equal? (hash-ref episode 'task) "user_task_0"))
+                      #:log void))
+     (stop-fake-openai fake)
+     (check-equal? finished '())
+     (check-equal? (length failed) 1)
+     (define line (string->jsexpr (car (file->lines usage-log))))
+     (check-regexp-match #rx"HTTP 400" (hash-ref line 'error))
+     (check-equal? (list (hash-ref line 'calls) (hash-ref line 'input_tokens) (hash-ref line 'output_tokens))
+                   '(1 100 10))
+     (check-false (hash-has-key? line 'utility)))))
