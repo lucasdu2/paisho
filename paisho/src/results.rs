@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+use crate::attacks::InjectVectors;
 use crate::suites::ToolResult;
 
 /// Which build of paisho wrote a file, so results can be traced to the code that produced
@@ -88,6 +89,8 @@ pub struct EpisodeResult {
     pub key: EpisodeKey,
     /// How the attack addressed the model, if the episode was attacked.
     pub model_name: Option<String>,
+    /// Which injection vectors the attack filled, if the episode was attacked.
+    pub inject_vectors: Option<InjectVectors>,
     /// The text placed at each injection vector, by injection ID.
     pub injections: HashMap<String, String>,
     pub tool_calls: Vec<ToolCallRecord>,

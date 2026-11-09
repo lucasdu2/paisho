@@ -3,6 +3,8 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::environments::Environment;
 use crate::suites::{Injection, Recording, SuiteEnvironment, Task, ToolContent};
 
@@ -10,9 +12,14 @@ use crate::suites::{Injection, Recording, SuiteEnvironment, Task, ToolContent};
 /// all possible injection vectors in an environment; InjectSeenOnly means we
 /// inject only at the injection vectors that are seen in the reference trace of
 /// successful task completion.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// In the server's protocol these are `"all"` and `"seen_only"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum InjectVectors {
+    #[serde(rename = "all")]
     InjectAll,
+    #[default]
+    #[serde(rename = "seen_only")]
     InjectSeenOnly,
 }
 

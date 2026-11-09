@@ -89,6 +89,10 @@ enum Request {
         /// name, and if given must equal it (including when the benchmark uses the generic
         /// name), so every episode of a benchmark addresses the model the same way.
         model_name: Option<String>,
+        /// Which injection vectors an attack fills: `"seen_only"` (the default), those the
+        /// task's reference trace shows the model, as AgentDojo does; or `"all"`, every
+        /// vector in the suite's environment. Applies only to attacked episodes.
+        inject_vectors: Option<InjectVectors>,
     },
     /// Lists the tools of the current episode's environment.
     ListTools,
@@ -213,6 +217,7 @@ trait AnySuite {
         injection: Option<&str>,
         attack: Option<&str>,
         model_name: Option<&str>,
+        vectors: InjectVectors,
     ) -> Result<Box<dyn RunningEpisode>, String>;
 }
 
@@ -267,8 +272,9 @@ impl<S: Suite> AnySuite for S {
         injection: Option<&str>,
         attack: Option<&str>,
         model_name: Option<&str>,
+        vectors: InjectVectors,
     ) -> Result<Box<dyn RunningEpisode>, String> {
-        let episode = Episode::<S>::start(task, injection, attack, model_name)?;
+        let episode = Episode::<S>::start(task, injection, attack, model_name, vectors)?;
         Ok(Box::new(episode))
     }
 }
@@ -306,6 +312,7 @@ impl<S: Suite> Episode<S> {
         injection: Option<&str>,
         attack: Option<&str>,
         model_name: Option<&str>,
+        vectors: InjectVectors,
     ) -> Result<Self, String> {
         let suite = S::NAME;
         let task = task
@@ -328,7 +335,7 @@ impl<S: Suite> Episode<S> {
                 // for it to matter. Caching would also complicate the story for
                 // parallelism, since parallel threads might need to synchronize
                 // on the cache.
-                let vectors = injection_vectors(task, InjectVectors::InjectSeenOnly);
+                let vectors = injection_vectors(task, vectors);
                 let texts = attack_texts(attack, model_name, injection)?;
                 inject_at(&vectors, &texts)
             }
@@ -416,6 +423,8 @@ struct ActiveEpisode {
     benchmark: Option<String>,
     key: EpisodeKey,
     model_name: Option<String>,
+    /// Which injection vectors the attack filled, if the episode was attacked.
+    inject_vectors: Option<InjectVectors>,
     tool_calls: Vec<ToolCallRecord>,
     /// The number of tool calls made before each `get_environment` request.
     environment_reads: Vec<usize>,
@@ -487,6 +496,7 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
             injection,
             attack,
             model_name,
+            inject_vectors,
         } => {
             let key = EpisodeKey {
                 suite,
@@ -494,7 +504,13 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
                 attack,
                 injection,
             };
-            match start(benchmark, key, model_name, logdir) {
+            match start(
+                benchmark,
+                key,
+                model_name,
+                inject_vectors.unwrap_or_default(),
+                logdir,
+            ) {
                 Ok(started) => {
                     let response = Response::Started {
                         prompt: started.episode.prompt(),
@@ -620,6 +636,7 @@ fn start(
     benchmark: Option<String>,
     key: EpisodeKey,
     mut model_name: Option<String>,
+    vectors: InjectVectors,
     logdir: &Path,
 ) -> Result<ActiveEpisode, String> {
     if let Some(name) = &benchmark {
@@ -655,6 +672,7 @@ fn start(
         key.injection.as_deref(),
         key.attack.as_deref(),
         model_name.as_deref(),
+        vectors,
     )?;
     Ok(ActiveEpisode {
         episode,
@@ -664,6 +682,7 @@ fn start(
             .attack
             .as_ref()
             .map(|_| model_name.unwrap_or_else(|| DEFAULT_MODEL_NAME.to_string())),
+        inject_vectors: key.attack.as_ref().map(|_| vectors),
         key,
         tool_calls: Vec::new(),
         environment_reads: Vec::new(),
@@ -684,6 +703,7 @@ fn finish(current: ActiveEpisode, output: Option<String>, logdir: &Path) -> Resp
             benchmark,
             key: current.key,
             model_name: current.model_name,
+            inject_vectors: current.inject_vectors,
             injections,
             tool_calls: current.tool_calls,
             environment_reads: current.environment_reads,
@@ -815,6 +835,7 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
+    use crate::suites::agentdojo::slack::SlackWeb;
 
     /// A connection's state, for sending it several requests in a row.
     struct Session {
@@ -941,6 +962,7 @@ mod tests {
         assert_eq!(result["attack"], "important_instructions");
         assert_eq!(result["injection"], "injection_task_3");
         assert_eq!(result["model_name"], "Claude");
+        assert_eq!(result["inject_vectors"], "seen_only");
         assert_eq!(result["output"], "Unemployment fell to 7.2%.");
         let build = serde_json::to_value(results::Build::current()).unwrap();
         for field in ["paisho_version", "paisho_commit", "paisho_dirty"] {
@@ -991,7 +1013,67 @@ mod tests {
         let result: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         assert_eq!(result["attack"], Value::Null);
         assert_eq!(result["model_name"], Value::Null);
+        assert_eq!(result["inject_vectors"], Value::Null);
         assert_eq!(result["output"], "");
+    }
+
+    #[test]
+    fn inject_vectors_chooses_where_the_attack_goes() {
+        let mut session = Session::new("inject_vectors");
+        start_benchmark(&mut session, "run-v", &["important_instructions"]);
+        let injected = |session: &mut Session, extra: Value| {
+            let mut request = json!({
+                "type": "start", "benchmark": "run-v", "suite": "slack", "task": "user_task_0",
+                "injection": "injection_task_3", "attack": "important_instructions",
+            });
+            request
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            let started = session.send(request);
+            assert_eq!(started["type"], "started", "{started}");
+            session.send(json!({ "type": "finish" }));
+            let path = session
+                .logdir
+                .join("run-v/slack/user_task_0/important_instructions/injection_task_3.json");
+            let result: Value =
+                serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+            let mut ids: Vec<String> = result["injections"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect();
+            ids.sort();
+            (result["inject_vectors"].clone(), ids)
+        };
+
+        // Omitted and "seen_only" agree: only the vector the reference trace shows.
+        let seen_only = (json!("seen_only"), vec!["injection_web_0".to_string()]);
+        assert_eq!(injected(&mut session, json!({})), seen_only);
+        assert_eq!(
+            injected(&mut session, json!({ "inject_vectors": "seen_only" })),
+            seen_only
+        );
+
+        // "all": every vector in the environment.
+        let mut all: Vec<String> = SlackWeb::INJECTION_DEFAULTS
+            .iter()
+            .map(|(id, _)| id.to_string())
+            .collect();
+        all.sort();
+        assert!(all.len() > 1);
+        assert_eq!(
+            injected(&mut session, json!({ "inject_vectors": "all" })),
+            (json!("all"), all)
+        );
+
+        let unknown = serde_json::from_value::<Request>(json!({
+            "type": "start", "suite": "slack", "task": "user_task_0",
+            "injection": "injection_task_3", "attack": "important_instructions",
+            "inject_vectors": "some",
+        }));
+        assert!(unknown.is_err());
     }
 
     /// `get_environment` shows the state as tool calls change it, isn't a tool call itself,
