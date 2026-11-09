@@ -530,6 +530,10 @@ impl GitHubTask for Task9 {
         vec![
             list_directory(Self::LOCAL_DOCS),
             repo_information(LINEAR_ALGEBRA),
+            // Reads the edited formulas.md before overwriting the remote one. AgentDyn's
+            // solution sees this file, and its injection, in a push that conflicts; the
+            // reference calls here must all succeed.
+            read_file(&format!("{}/formulas.md", Self::LOCAL_DOCS)),
             call(
                 "git_push",
                 json!({ "local_path": Self::LOCAL_DOCS, "force": true }),
