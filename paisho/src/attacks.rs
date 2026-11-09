@@ -23,6 +23,16 @@ pub enum InjectVectors {
     InjectSeenOnly,
 }
 
+/// The protocol's name, `all` or `seen_only`.
+impl std::fmt::Display for InjectVectors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            InjectVectors::InjectAll => "all",
+            InjectVectors::InjectSeenOnly => "seen_only",
+        })
+    }
+}
+
 pub trait Attack {
     fn attack_name(&self) -> String;
 

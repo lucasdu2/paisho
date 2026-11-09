@@ -6,9 +6,9 @@
 //! ```
 //!
 //! Benign episodes use `none` for the attack and the injection, as AgentDojo does. Attacked
-//! episodes that fill every injection vector ([`InjectVectors::InjectAll`]) are saved as
-//! `<injection>.all.json` instead, next to the default ones, which they don't replace or
-//! complete. Results are
+//! episodes of a benchmark that fills every injection vector ([`InjectVectors::InjectAll`])
+//! are saved as `<injection>.all.json` instead, so their files can't be mistaken for the
+//! default ones. Results are
 //! written when an episode finishes, so an interrupted run can be resumed: an episode whose
 //! file exists is complete.
 
@@ -57,6 +57,10 @@ pub struct BenchmarkConfig {
     /// How attacks address the model, such as `"GPT-4"`; `None` uses AgentDojo's generic
     /// name. Shared by every episode, as the model is.
     pub model_name: Option<String>,
+    /// Which injection vectors every attacked episode fills. Benchmarks registered before
+    /// this was configurable have no such field and used the default.
+    #[serde(default)]
+    pub inject_vectors: InjectVectors,
 }
 
 /// One episode of a benchmark, one of three kinds:
@@ -177,8 +181,13 @@ pub fn register(logdir: &Path, config: &BenchmarkConfig) -> Result<bool, String>
             if existing != *config {
                 return Err(format!(
                     "benchmark {:?} already exists with a different configuration \
-                     (suites {:?}, attacks {:?}, model name {:?}); choose another name",
-                    config.name, existing.suites, existing.attacks, existing.model_name
+                     (suites {:?}, attacks {:?}, model name {:?}, injection vectors \"{}\"); \
+                     choose another name",
+                    config.name,
+                    existing.suites,
+                    existing.attacks,
+                    existing.model_name,
+                    existing.inject_vectors
                 ));
             }
             Ok(true)
@@ -234,21 +243,20 @@ pub fn result_path(
     }
 }
 
-/// Whether `key`, run with the default injection vectors, already has a result in the
-/// benchmark: its file exists and records an evaluation (`utility` and `security`, either of
+/// Whether `key`, run with `vectors`, already has a result in the benchmark: its file exists and records an evaluation (`utility` and `security`, either of
 /// which may be `null`). A file that can't be read or parsed doesn't count, so the episode is
 /// rerun.
-pub fn is_complete(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> bool {
-    fs::read_to_string(result_path(
-        logdir,
-        benchmark,
-        key,
-        InjectVectors::default(),
-    ))
-    .ok()
-    .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
-    .and_then(|result| result.as_object().cloned())
-    .is_some_and(|result| result.contains_key("utility") && result.contains_key("security"))
+pub fn is_complete(
+    logdir: &Path,
+    benchmark: &str,
+    key: &EpisodeKey,
+    vectors: InjectVectors,
+) -> bool {
+    fs::read_to_string(result_path(logdir, benchmark, key, vectors))
+        .ok()
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+        .and_then(|result| result.as_object().cloned())
+        .is_some_and(|result| result.contains_key("utility") && result.contains_key("security"))
 }
 
 /// Saves `result` to its result file, replacing any earlier result for the same episode.
@@ -275,7 +283,17 @@ pub fn save(logdir: &Path, result: &EpisodeResult) -> io::Result<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::Build;
+    use super::{Build, ConfigFile};
+    use crate::attacks::InjectVectors;
+
+    /// A configuration saved before injection vectors were configurable loads as the default.
+    #[test]
+    fn configs_without_inject_vectors_use_the_default() {
+        let json = r#"{"name": "old", "suites": ["slack"], "attacks": [], "model_name": null,
+                       "paisho_version": "0.1.0"}"#;
+        let file: ConfigFile = serde_json::from_str(json).unwrap();
+        assert_eq!(file.config.inject_vectors, InjectVectors::InjectSeenOnly);
+    }
 
     /// `build.rs` recorded either a full commit hash and whether it was dirty, or neither.
     #[test]

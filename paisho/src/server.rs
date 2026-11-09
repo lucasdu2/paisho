@@ -69,6 +69,12 @@ enum Request {
         /// How attacks address the model under test, such as `"GPT-4"`; defaults to
         /// AgentDojo's generic name. Part of the configuration, so the same for every episode.
         model_name: Option<String>,
+        /// Which injection vectors attacks fill: `"seen_only"` (the default), those each
+        /// task's reference trace shows the model, as AgentDojo does; or `"all"`, every vector
+        /// in the suite's environment. Part of the configuration, so the same for every
+        /// episode.
+        #[serde(default)]
+        inject_vectors: InjectVectors,
     },
     /// Starts a new episode, replacing any episode in progress on this connection.
     /// With `injection` and `attack`, the environment is attacked; otherwise not.
@@ -89,10 +95,9 @@ enum Request {
         /// name, and if given must equal it (including when the benchmark uses the generic
         /// name), so every episode of a benchmark addresses the model the same way.
         model_name: Option<String>,
-        /// Which injection vectors an attack fills: `"seen_only"` (the default), those the
-        /// task's reference trace shows the model, as AgentDojo does; or `"all"`, every
-        /// vector in the suite's environment. Applies only to attacked episodes. In a
-        /// benchmark, `"all"` results are saved separately and aren't in `pending`.
+        /// Which injection vectors an attack fills, as in `start_benchmark`. Applies only to
+        /// attacked episodes. Without a benchmark, defaults to `"seen_only"`. With a
+        /// benchmark, defaults to the benchmark's, and if given must equal it.
         inject_vectors: Option<InjectVectors>,
     },
     /// Lists the tools of the current episode's environment.
@@ -478,12 +483,14 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
             suites,
             attacks,
             model_name,
+            inject_vectors,
         } => {
             let config = BenchmarkConfig {
                 name,
                 suites,
                 attacks,
                 model_name,
+                inject_vectors,
             };
             match start_benchmark(&config, logdir) {
                 Ok(response) => response,
@@ -505,13 +512,7 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
                 attack,
                 injection,
             };
-            match start(
-                benchmark,
-                key,
-                model_name,
-                inject_vectors.unwrap_or_default(),
-                logdir,
-            ) {
+            match start(benchmark, key, model_name, inject_vectors, logdir) {
                 Ok(started) => {
                     let response = Response::Started {
                         prompt: started.episode.prompt(),
@@ -614,7 +615,7 @@ fn start_benchmark(config: &BenchmarkConfig, logdir: &Path) -> Result<Response, 
     let total = episodes.len();
     let pending = episodes
         .into_iter()
-        .filter(|key| !results::is_complete(logdir, &config.name, key))
+        .filter(|key| !results::is_complete(logdir, &config.name, key, config.inject_vectors))
         .collect();
     Ok(Response::BenchmarkStarted {
         name: config.name.clone(),
@@ -637,7 +638,7 @@ fn start(
     benchmark: Option<String>,
     key: EpisodeKey,
     mut model_name: Option<String>,
-    vectors: InjectVectors,
+    mut vectors: Option<InjectVectors>,
     logdir: &Path,
 ) -> Result<ActiveEpisode, String> {
     if let Some(name) = &benchmark {
@@ -667,7 +668,19 @@ fn start(
                 ));
             }
         }
+        match vectors {
+            None => vectors = Some(config.inject_vectors),
+            Some(given) if given != config.inject_vectors => {
+                return Err(format!(
+                    "injection vectors \"{given}\" don't match benchmark {name}'s \"{}\"; \
+                     omit them to use the benchmark's",
+                    config.inject_vectors
+                ));
+            }
+            Some(_) => {}
+        }
     }
+    let vectors = vectors.unwrap_or_default();
     let episode = find_suite(&key.suite)?.start_episode(
         key.task.as_deref(),
         key.injection.as_deref(),
@@ -1022,24 +1035,39 @@ mod tests {
     fn inject_vectors_chooses_where_the_attack_goes() {
         let mut session = Session::new("inject_vectors");
         start_benchmark(&mut session, "run-v", &["important_instructions"]);
-        let run = |session: &mut Session, extra: Value| {
+        let started = session.send(json!({
+            "type": "start_benchmark", "name": "run-w", "suites": ["slack"],
+            "attacks": ["important_instructions"], "model_name": "Claude",
+            "inject_vectors": "all",
+        }));
+        assert_eq!(started["pending"].as_array().unwrap().len(), 21 * 6 + 5);
+        let config = std::fs::read_to_string(session.logdir.join("run-w/benchmark.json")).unwrap();
+        let config: Value = serde_json::from_str(&config).unwrap();
+        assert_eq!(config["inject_vectors"], "all");
+
+        let run = |session: &mut Session, benchmark: &str, extra: Value| {
             let mut request = json!({
-                "type": "start", "benchmark": "run-v", "suite": "slack", "task": "user_task_0",
-                "injection": "injection_task_3", "attack": "important_instructions",
+                "type": "start", "benchmark": benchmark, "suite": "slack",
+                "task": "user_task_0", "injection": "injection_task_3",
+                "attack": "important_instructions",
             });
             request
                 .as_object_mut()
                 .unwrap()
                 .extend(extra.as_object().unwrap().clone());
             let started = session.send(request);
-            assert_eq!(started["type"], "started", "{started}");
-            session.send(json!({ "type": "finish" }));
+            if started["type"] == "started" {
+                session.send(json!({ "type": "finish" }));
+            }
+            started
         };
-        // The saved result in `file`: its mode and the IDs of the vectors it filled.
-        let saved = |session: &Session, file: &str| {
+        // The saved result in `file` of `benchmark`: its mode and the IDs of the vectors it
+        // filled.
+        let saved = |session: &Session, benchmark: &str, file: &str| {
             let path = session
                 .logdir
-                .join("run-v/slack/user_task_0/important_instructions")
+                .join(benchmark)
+                .join("slack/user_task_0/important_instructions")
                 .join(file);
             let result: Value =
                 serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
@@ -1053,27 +1081,50 @@ mod tests {
             (result["inject_vectors"].clone(), ids)
         };
 
-        // Omitted and "seen_only" agree: only the vector the reference trace shows.
+        // A "seen_only" benchmark: omitted and "seen_only" agree, filling only the vector the
+        // reference trace shows; "all" doesn't match the benchmark.
         let seen_only = (json!("seen_only"), vec!["injection_web_0".to_string()]);
-        run(&mut session, json!({}));
-        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
-        run(&mut session, json!({ "inject_vectors": "seen_only" }));
-        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
+        run(&mut session, "run-v", json!({}));
+        assert_eq!(saved(&session, "run-v", "injection_task_3.json"), seen_only);
+        run(
+            &mut session,
+            "run-v",
+            json!({ "inject_vectors": "seen_only" }),
+        );
+        assert_eq!(saved(&session, "run-v", "injection_task_3.json"), seen_only);
+        let mismatch = run(&mut session, "run-v", json!({ "inject_vectors": "all" }));
+        assert_eq!(
+            mismatch["message"],
+            "injection vectors \"all\" don't match benchmark run-v's \"seen_only\"; omit \
+             them to use the benchmark's"
+        );
 
-        // "all": every vector in the environment, saved next to the default result without
-        // replacing it.
+        // An "all" benchmark: every vector in the environment, by default.
         let mut all: Vec<String> = SlackWeb::INJECTION_DEFAULTS
             .iter()
             .map(|(id, _)| id.to_string())
             .collect();
         all.sort();
         assert!(all.len() > 1);
-        run(&mut session, json!({ "inject_vectors": "all" }));
+        let started = run(&mut session, "run-w", json!({}));
+        assert_eq!(started["type"], "started", "{started}");
         assert_eq!(
-            saved(&session, "injection_task_3.all.json"),
+            saved(&session, "run-w", "injection_task_3.all.json"),
             (json!("all"), all)
         );
-        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
+
+        // Its pending list follows its own results.
+        let resumed = session.send(json!({
+            "type": "start_benchmark", "name": "run-w", "suites": ["slack"],
+            "attacks": ["important_instructions"], "model_name": "Claude",
+            "inject_vectors": "all",
+        }));
+        let pending = resumed["pending"].as_array().unwrap();
+        assert_eq!(pending.len(), 21 * 6 + 5 - 1);
+        assert!(!pending.contains(&json!({
+            "suite": "slack", "task": "user_task_0",
+            "attack": "important_instructions", "injection": "injection_task_3",
+        })));
 
         let unknown = serde_json::from_value::<Request>(json!({
             "type": "start", "suite": "slack", "task": "user_task_0",
@@ -1329,6 +1380,12 @@ mod tests {
             "attacks": ["important_instructions"], "model_name": "GPT-4",
         }));
         assert!(error(other_model).contains("already exists with a different configuration"));
+        let other_vectors = session.send(json!({
+            "type": "start_benchmark", "name": "run-d", "suites": ["slack"],
+            "attacks": ["important_instructions"], "model_name": "Claude",
+            "inject_vectors": "all",
+        }));
+        assert!(error(other_vectors).contains("injection vectors \"seen_only\""));
         let bad_name = start_benchmark(&mut session, "../escape", &[]);
         assert!(error(bad_name).contains("invalid benchmark name"));
         let bad_attack = start_benchmark(&mut session, "run-e", &["nope"]);
