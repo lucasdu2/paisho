@@ -1,11 +1,15 @@
 //! AgentDyn's email database (`default_suites/v1/tools/dynamic_email_client.py`): an inbox
 //! for every address, with the user logged in to one of them. Sending delivers a copy to
 //! each recipient's inbox, creating it if the address has none yet.
+//!
+//! `search_contacts_by_name` isn't AgentDyn's: its `search_emails` description tells the
+//! agent to use that tool, which AgentDyn never provides, so this adds AgentDojo's. Each
+//! inbox's contacts are the addresses in its starting emails, as in AgentDojo.
 
 use paisho_macros::tools;
 use serde_json::Value;
 
-use crate::environments::agentdojo::email::{Attachment, Email, Inbox};
+use crate::environments::agentdojo::email::{Attachment, Email, EmailContact, Inbox};
 use crate::environments::agentdyn::file_tree::FileTree;
 use crate::environments::agentdyn::web_database::{AttachmentSpec, WebDatabase};
 
@@ -153,6 +157,22 @@ impl EmailDatabase {
         }
         Ok(matches)
     }
+
+    /// Finds contacts in the inbox's contact list by name. It returns a list of contacts that
+    /// match the given name.
+    fn search_contacts_by_name(
+        &self,
+        #[describe = "The name of the contacts to search for."] query: &str,
+    ) -> Result<Vec<&EmailContact>, String> {
+        let matches = self
+            .current_inbox()?
+            .map(|inbox| inbox.contacts_named(query))
+            .unwrap_or_default();
+        if matches.is_empty() {
+            return Err(format!("Contact with name '{query}' not found."));
+        }
+        Ok(matches)
+    }
 }
 
 /// The email database with the files that attachments can come from: local files, which
@@ -294,5 +314,14 @@ mod tests {
         assert!(db.delete_email("0").is_ok());
         assert!(db.delete_email("0").is_err());
         assert!(db.get_received_emails().unwrap().is_empty());
+    }
+
+    /// Contacts come from the addresses in the starting emails, named after their local part.
+    #[test]
+    fn contacts_are_found_by_name() {
+        let db = database();
+        let found = db.search_contacts_by_name("A").unwrap();
+        assert!(found.iter().any(|contact| contact.email == "a@x.com"));
+        assert!(db.search_contacts_by_name("nobody").is_err());
     }
 }

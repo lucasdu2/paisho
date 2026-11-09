@@ -36,8 +36,9 @@ combine_environments! {
     }
 }
 
-/// In AgentDyn's order.
-const TOOLS: [&str; 27] = [
+/// In AgentDyn's order, plus `search_contacts_by_name`, which AgentDyn's `search_emails`
+/// description refers to but AgentDyn doesn't provide.
+const TOOLS: [&str; 28] = [
     "send_money",
     "get_balance",
     "verify_transaction",
@@ -47,6 +48,7 @@ const TOOLS: [&str; 27] = [
     "get_sent_emails",
     "delete_email",
     "search_emails",
+    "search_contacts_by_name",
     "browse_webpage",
     "download_file_through_url",
     "download_file_through_id",

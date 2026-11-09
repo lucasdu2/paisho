@@ -190,6 +190,15 @@ impl Inbox {
         })
     }
 
+    /// Contacts whose name contains `query`, ignoring case.
+    pub(crate) fn contacts_named(&self, query: &str) -> Vec<&EmailContact> {
+        let name = query.to_lowercase();
+        self.contact_list
+            .iter()
+            .filter(|contact| contact.name.to_lowercase().contains(&name))
+            .collect()
+    }
+
     /// Emails whose sender is `address`, ignoring case.
     pub(crate) fn from_address(&self, address: &str) -> Vec<&Email> {
         let address = address.to_lowercase();
@@ -419,12 +428,7 @@ impl Inbox {
         &self,
         #[describe = "The name of the contacts to search for."] query: &str,
     ) -> Result<Vec<&EmailContact>, String> {
-        let name = query.to_lowercase();
-        let matches: Vec<&EmailContact> = self
-            .contact_list
-            .iter()
-            .filter(|contact| contact.name.to_lowercase().contains(&name))
-            .collect();
+        let matches = self.contacts_named(query);
         if matches.is_empty() {
             return Err(format!("Contact with name '{query}' not found."));
         }
