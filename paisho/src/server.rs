@@ -91,7 +91,8 @@ enum Request {
         model_name: Option<String>,
         /// Which injection vectors an attack fills: `"seen_only"` (the default), those the
         /// task's reference trace shows the model, as AgentDojo does; or `"all"`, every
-        /// vector in the suite's environment. Applies only to attacked episodes.
+        /// vector in the suite's environment. Applies only to attacked episodes. In a
+        /// benchmark, `"all"` results are saved separately and aren't in `pending`.
         inject_vectors: Option<InjectVectors>,
     },
     /// Lists the tools of the current episode's environment.
@@ -1021,7 +1022,7 @@ mod tests {
     fn inject_vectors_chooses_where_the_attack_goes() {
         let mut session = Session::new("inject_vectors");
         start_benchmark(&mut session, "run-v", &["important_instructions"]);
-        let injected = |session: &mut Session, extra: Value| {
+        let run = |session: &mut Session, extra: Value| {
             let mut request = json!({
                 "type": "start", "benchmark": "run-v", "suite": "slack", "task": "user_task_0",
                 "injection": "injection_task_3", "attack": "important_instructions",
@@ -1033,9 +1034,13 @@ mod tests {
             let started = session.send(request);
             assert_eq!(started["type"], "started", "{started}");
             session.send(json!({ "type": "finish" }));
+        };
+        // The saved result in `file`: its mode and the IDs of the vectors it filled.
+        let saved = |session: &Session, file: &str| {
             let path = session
                 .logdir
-                .join("run-v/slack/user_task_0/important_instructions/injection_task_3.json");
+                .join("run-v/slack/user_task_0/important_instructions")
+                .join(file);
             let result: Value =
                 serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
             let mut ids: Vec<String> = result["injections"]
@@ -1050,23 +1055,25 @@ mod tests {
 
         // Omitted and "seen_only" agree: only the vector the reference trace shows.
         let seen_only = (json!("seen_only"), vec!["injection_web_0".to_string()]);
-        assert_eq!(injected(&mut session, json!({})), seen_only);
-        assert_eq!(
-            injected(&mut session, json!({ "inject_vectors": "seen_only" })),
-            seen_only
-        );
+        run(&mut session, json!({}));
+        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
+        run(&mut session, json!({ "inject_vectors": "seen_only" }));
+        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
 
-        // "all": every vector in the environment.
+        // "all": every vector in the environment, saved next to the default result without
+        // replacing it.
         let mut all: Vec<String> = SlackWeb::INJECTION_DEFAULTS
             .iter()
             .map(|(id, _)| id.to_string())
             .collect();
         all.sort();
         assert!(all.len() > 1);
+        run(&mut session, json!({ "inject_vectors": "all" }));
         assert_eq!(
-            injected(&mut session, json!({ "inject_vectors": "all" })),
+            saved(&session, "injection_task_3.all.json"),
             (json!("all"), all)
         );
+        assert_eq!(saved(&session, "injection_task_3.json"), seen_only);
 
         let unknown = serde_json::from_value::<Request>(json!({
             "type": "start", "suite": "slack", "task": "user_task_0",

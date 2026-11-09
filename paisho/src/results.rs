@@ -5,7 +5,10 @@
 //! <logdir>/<benchmark>/<suite>/<task>/<attack>/<injection>.json    one file per episode
 //! ```
 //!
-//! Benign episodes use `none` for the attack and the injection, as AgentDojo does. Results are
+//! Benign episodes use `none` for the attack and the injection, as AgentDojo does. Attacked
+//! episodes that fill every injection vector ([`InjectVectors::InjectAll`]) are saved as
+//! `<injection>.all.json` instead, next to the default ones, which they don't replace or
+//! complete. Results are
 //! written when an episode finishes, so an interrupted run can be resumed: an episode whose
 //! file exists is complete.
 
@@ -204,28 +207,48 @@ pub fn load_config(logdir: &Path, name: &str) -> Result<BenchmarkConfig, String>
 /// The result file of `key` in the benchmark `benchmark`.
 ///
 /// An injection alone is saved where AgentDojo saves it, as if the injection were a task:
-/// `<suite>/<injection>/none/none.json`.
-pub fn result_path(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> PathBuf {
+/// `<suite>/<injection>/none/none.json`. An attacked episode with `vectors` set to
+/// [`InjectVectors::InjectAll`] is saved as `<injection>.all.json`; `vectors` doesn't affect
+/// other episodes, which nothing is injected into.
+pub fn result_path(
+    logdir: &Path,
+    benchmark: &str,
+    key: &EpisodeKey,
+    vectors: InjectVectors,
+) -> PathBuf {
     let suite = logdir.join(benchmark).join(&key.suite);
+    let suffix = match (&key.attack, vectors) {
+        (Some(_), InjectVectors::InjectAll) => ".all",
+        _ => "",
+    };
     match (&key.task, &key.injection) {
         (Some(task), injection) => suite
             .join(task)
             .join(key.attack.as_deref().unwrap_or("none"))
-            .join(format!("{}.json", injection.as_deref().unwrap_or("none"))),
+            .join(format!(
+                "{}{suffix}.json",
+                injection.as_deref().unwrap_or("none")
+            )),
         (None, Some(injection)) => suite.join(injection).join("none").join("none.json"),
         (None, None) => unreachable!("an episode has a task, an injection, or both"),
     }
 }
 
-/// Whether `key` already has a result in the benchmark: its file exists and records an
-/// evaluation (`utility` and `security`, either of which may be `null`). A file that can't be
-/// read or parsed doesn't count, so the episode is rerun.
+/// Whether `key`, run with the default injection vectors, already has a result in the
+/// benchmark: its file exists and records an evaluation (`utility` and `security`, either of
+/// which may be `null`). A file that can't be read or parsed doesn't count, so the episode is
+/// rerun.
 pub fn is_complete(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> bool {
-    fs::read_to_string(result_path(logdir, benchmark, key))
-        .ok()
-        .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
-        .and_then(|result| result.as_object().cloned())
-        .is_some_and(|result| result.contains_key("utility") && result.contains_key("security"))
+    fs::read_to_string(result_path(
+        logdir,
+        benchmark,
+        key,
+        InjectVectors::default(),
+    ))
+    .ok()
+    .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+    .and_then(|result| result.as_object().cloned())
+    .is_some_and(|result| result.contains_key("utility") && result.contains_key("security"))
 }
 
 /// Saves `result` to its result file, replacing any earlier result for the same episode.
@@ -236,7 +259,8 @@ pub fn is_complete(logdir: &Path, benchmark: &str, key: &EpisodeKey) -> bool {
 pub fn save(logdir: &Path, result: &EpisodeResult) -> io::Result<PathBuf> {
     static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-    let path = result_path(logdir, &result.benchmark, &result.key);
+    let vectors = result.inject_vectors.unwrap_or_default();
+    let path = result_path(logdir, &result.benchmark, &result.key, vectors);
     fs::create_dir_all(path.parent().expect("result path has a parent"))?;
     let temp = path.with_extension(format!(
         "json.tmp-{}-{}",
