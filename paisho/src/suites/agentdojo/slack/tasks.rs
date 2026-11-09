@@ -927,6 +927,10 @@ impl Task for Task16 {
 }
 
 combine_tasks! {
+    /// Combines v1.2's tasks 0 and 2, so the user may be invited as "dora" as in task 2.
+    /// AgentDojo combines them in v1 from v1's task 2, which requires "Dora", and no later
+    /// version rebuilds the combination, so AgentDojo fails an invitation as "dora" that
+    /// passes here.
     pub struct Task17 {
         tasks: [Task0, Task2],
     }

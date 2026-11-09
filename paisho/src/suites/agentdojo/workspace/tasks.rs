@@ -1821,12 +1821,20 @@ combine_tasks! {
 }
 
 combine_tasks! {
+    /// Combines v1.2's tasks 30 and 31, so the file's name is checked as in task 31. AgentDojo
+    /// combines them in v1 from v1's task 31, which doesn't check the name, and no later
+    /// version rebuilds the combination, so AgentDojo passes a file with the wrong name that
+    /// fails here.
     pub struct Task36 {
         tasks: [Task30, Task31],
     }
 }
 
 combine_tasks! {
+    /// Combines v1.2's tasks 30 and 32, so the file's name is checked as in task 32. AgentDojo
+    /// combines them in v1 from v1's task 32, which doesn't check the name, and no later
+    /// version rebuilds the combination, so AgentDojo passes a file with the wrong name that
+    /// fails here.
     pub struct Task37 {
         tasks: [Task30, Task32],
     }
