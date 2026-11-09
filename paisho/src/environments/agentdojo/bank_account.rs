@@ -22,6 +22,11 @@ pub(crate) struct Transaction {
 }
 
 /// The user's bank account. As in AgentDojo, sending money doesn't change the balance.
+/// This behavior is unrealistic, but no user task in the AgentDojo benchmarks actually
+/// reads the balance. Additionally, certain injections (e.g., Injection6) also require that
+/// more money *can* be sent than is actually in the account, which further underscores
+/// the fact that bank balance in AgentDojo is not important. paisho thus makes the same
+/// decision here.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct BankAccount {
@@ -32,7 +37,7 @@ pub(crate) struct BankAccount {
 }
 
 /// One more than the largest ID among `transactions` and `scheduled`, or 1 if both are
-/// empty, as AgentDojo's `next_id` gives a new transaction.
+/// empty. This matches the behavior of AgentDojo's `next_id` for transactions.
 pub(crate) fn next_transaction_id(transactions: &[Transaction], scheduled: &[Transaction]) -> u32 {
     transactions
         .iter()
