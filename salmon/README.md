@@ -40,9 +40,10 @@ Each finished episode also appends a line to `usage/<benchmark>.conversations.js
 the episode, the system prompt and the whole conversation: the user's prompt, the model's
 replies (text and tool calls) and the tool results. paisho's saved results hold only the
 final answer and the tool calls, so this is where text from earlier turns is kept. An episode
-rerun because the model gave no final answer logs its last attempt; a failed episode logs
-nothing. Use `--conversation-log FILE` to write it elsewhere, or `--no-conversation-log` to
-skip it.
+rerun because the model gave no final answer logs its last attempt as `messages` and the
+others, oldest first, as `earlier_attempts`; reruns continue in the same environment, so
+what an earlier attempt did counts towards the result. A failed episode logs nothing. Use
+`--conversation-log FILE` to write it elsewhere, or `--no-conversation-log` to skip it.
 
 Use `--base-url https://openrouter.ai/api/v1 --api-key-env OPENROUTER_API_KEY` for
 OpenRouter, and `--no-temperature` for models that reject a temperature. With

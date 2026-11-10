@@ -128,6 +128,7 @@
                    (hasheq 'role "tool" 'call_id "2" 'name "no_such_tool"
                            'text "Invalid tool no_such_tool provided." 'error #t))
      (check-equal? (last messages) (hasheq 'role "assistant" 'text "Done." 'tool_calls '()))
+     (check-equal? (hash-ref conversation 'earlier_attempts) '())
 
      ;; What the model was sent: paisho's tools, the injected page, and the unknown tool's error.
      (define requests (map cdr (fake-openai-requests fake)))
@@ -180,6 +181,43 @@
      (stop-fake-openai fake)
      (check-equal? failed '())
      (check-equal? (length finished) (+ (* 21 (+ 1 5)) 5)))))
+
+(test-case "an episode rerun for want of an answer logs every attempt"
+  (with-paisho
+   (lambda (socket logdir)
+     ;; The first attempt reads a page and stops without answering, so the episode is rerun;
+     ;; the second answers.
+     (define calls 0)
+     (define fake
+       (start-fake-openai
+        (lambda (_body)
+          (set! calls (add1 calls))
+          (values 200 (case calls
+                        [(1) (chat-reply #f (list "1" "get_webpage" (hasheq 'url "www.informations.com")))]
+                        [(2) (chat-reply #f)]
+                        [else (chat-reply "Done.")])))))
+     (define model (openai-adapter "scripted" #:api-key "unused" #:base-url (fake-openai-base-url fake)))
+     (define conversation-log (build-path logdir "conversations.jsonl"))
+     (define-values (finished failed)
+       (run-benchmark model
+                      #:name "salmon-retried"
+                      #:suites '("slack")
+                      #:attacks '()
+                      #:socket socket
+                      #:conversation-log conversation-log
+                      #:select? (lambda (episode) (equal? (hash-ref episode 'task) "user_task_0"))
+                      #:log void))
+     (stop-fake-openai fake)
+     (check-equal? failed '())
+     (define line (string->jsexpr (car (file->lines conversation-log))))
+     (define (roles messages) (map (lambda (m) (hash-ref m 'role)) messages))
+     (check-equal? (roles (hash-ref line 'messages)) '("user" "assistant"))
+     (check-equal? (hash-ref (last (hash-ref line 'messages)) 'text) "Done.")
+     (check-equal? (map roles (hash-ref line 'earlier_attempts))
+                   '(("user" "assistant" "tool" "assistant")))
+     (check-equal? (hash-ref (second (car (hash-ref line 'earlier_attempts))) 'tool_calls)
+                   (list (hasheq 'id "1" 'name "get_webpage"
+                                 'arguments (hasheq 'url "www.informations.com")))))))
 
 (test-case "a failed episode still logs the calls it made"
   (with-paisho

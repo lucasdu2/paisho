@@ -87,7 +87,8 @@
     (assistant-message-text message)))
 
 ;; Runs one episode on `conn` (whose fields `episode` holds, as in a benchmark's `pending`
-;; list) and returns paisho's `finished` response and the conversation of the last attempt.
+;; list) and returns paisho's `finished` response and the conversation of each attempt,
+;; oldest first; the last is the one whose answer was evaluated.
 ;; `on-usage` is called with each model call's `usage`, as in `run-agent`.
 (define (run-episode model conn episode
                      #:benchmark [benchmark #f]
@@ -100,11 +101,11 @@
   (define prompt (hash-ref started 'prompt))
   ;; As in AgentDojo, a retry continues in the same environment: paisho keeps the episode's
   ;; state and trace across attempts.
-  (define-values (conversation output)
-    (for/fold ([conversation '()] [output #f])
+  (define-values (attempts output)
+    (for/fold ([attempts '()] [output #f])
               ([_ (in-range max-attempts)]
                #:break output)
       (define conversation (run-agent model conn prompt tools #:system system #:on-usage on-usage))
-      (values conversation (final-output conversation))))
+      (values (cons conversation attempts) (final-output conversation))))
   (values (paisho-request conn (hasheq 'type "finish" 'output (or output "")))
-          conversation))
+          (reverse attempts)))

@@ -32,9 +32,10 @@
 ;; every episode run under `name`.
 ;;
 ;; With `conversation-log`, a file path, each finished episode appends a JSON line to it with
-;; the episode, the system prompt and its conversation (see `message->jsexpr`). As with
-;; paisho's saved result, an episode whose model gave no final answer and was rerun logs the
-;; last attempt's conversation; a failed episode logs none.
+;; the episode, the system prompt and its conversation (see `message->jsexpr`): `messages`
+;; for the last attempt, whose answer was evaluated, and `earlier_attempts` for those rerun
+;; because the model gave no final answer. Reruns continue in the same environment, so what
+;; an earlier attempt did counts towards the result. A failed episode logs none.
 (define (run-benchmark model
                        #:name name
                        #:usage-log [usage-log #f]
@@ -86,14 +87,17 @@
           (newline)))))
 
   ;; Called with `lock` held.
-  (define (record-conversation! episode conversation)
+  (define (record-conversation! episode attempts)
     (when conversation-log
       (with-output-to-file conversation-log #:exists 'append
         (lambda ()
           (write-json (hash-union (hasheq 'benchmark name 'model (adapter-name model))
                                   episode
                                   (hasheq 'system default-system-prompt
-                                          'messages (map message->jsexpr conversation))))
+                                          'messages (map message->jsexpr (last attempts))
+                                          'earlier_attempts
+                                          (for/list ([conversation (in-list (drop-right attempts 1))])
+                                            (map message->jsexpr conversation)))))
           (newline)))))
 
   (define (worker)
@@ -112,7 +116,7 @@
                               (set! failed (cons (cons episode (exn-message e)) failed))
                               (record! episode episode-usage (hasheq 'error (exn-message e)))))
                            (log (format "failed ~a: ~a" episode (exn-message e))))])
-          (define-values (result conversation)
+          (define-values (result attempts)
             (run-episode model conn episode #:benchmark name #:on-usage add-usage!))
           (define outcome (hasheq 'utility (hash-ref result 'utility)
                                   'security (hash-ref result 'security)))
@@ -123,7 +127,7 @@
                                              'usage (usage->jsexpr episode-usage))
                                   finished))
              (record! episode episode-usage outcome)
-             (record-conversation! episode conversation))))
+             (record-conversation! episode attempts))))
         (loop)))
     (paisho-close conn))
 
