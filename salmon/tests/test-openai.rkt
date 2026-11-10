@@ -99,6 +99,33 @@
   (check-not-false (member "Authorization: Bearer sk-test" headers))
   (check-equal? (hash-ref body 'model) "gpt-x"))
 
+(test-case "rate limits wait as long as the response asks, up to a limit"
+  ;; Each attempt is rate limited, asking for the wait in `headers`, until the last succeeds.
+  (define (waits-for . headers)
+    (define attempts 0)
+    (define server
+      (start-fake-openai (lambda (_body)
+                           (set! attempts (add1 attempts))
+                           (if (<= attempts (length headers))
+                               (values 429 (hasheq 'error (hasheq 'message "slow down"))
+                                       (list (list-ref headers (sub1 attempts))))
+                               (values 200 (chat-reply "Hello."))))))
+    (define model (openai-adapter "gpt-x" #:api-key "sk-test" #:base-url (fake-openai-base-url server)))
+    (define waits '())
+    (parameterize ([openai-sleep (lambda (seconds) (set! waits (append waits (list seconds))))])
+      (complete model "S." (list (user-message "Hi.")) '()))
+    (stop-fake-openai server)
+    waits)
+  ;; Backoff is 1, 2, 4 and 8 seconds; a longer request wins, and a shorter one doesn't.
+  (check-equal? (waits-for "retry-after-ms: 2500" "Retry-After: 30" "retry-after: 0.5")
+                '(2.5 30.0 4.0))
+  ;; retry-after-ms is preferred, and waits are capped at a minute.
+  (check-equal? (waits-for "retry-after: 9\r\nretry-after-ms: 3000" "retry-after: 600")
+                '(3.0 60.0))
+  ;; Dates and nonsense fall back to the backoff.
+  (check-equal? (waits-for "retry-after: Wed, 21 Oct 2026 07:28:00 GMT" "retry-after: -3")
+                '(1 2)))
+
 (test-case "other HTTP errors fail without retrying"
   (define server
     (start-fake-openai (lambda (_body) (values 400 (hasheq 'error (hasheq 'message "bad request"))))))

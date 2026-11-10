@@ -17,7 +17,7 @@
 (struct fake-openai (listener [thread #:mutable] port [requests #:mutable]))
 
 ;; Starts a server that answers each request with `(respond body)`, which returns a status
-;; code and a response jsexpr.
+;; code and a response jsexpr, and optionally a list of extra header lines.
 (define (start-fake-openai respond)
   (define listener (tcp-listen 0 16 #t "127.0.0.1"))
   (define-values (_host port _remote-host _remote-port) (tcp-addresses listener #t))
@@ -35,10 +35,15 @@
         (and (string-ci=? (car parts) "content-length") (string->number (string-trim (cadr parts))))))
     (define body (bytes->jsexpr (read-bytes (or length 0) in)))
     (set-fake-openai-requests! server (append (fake-openai-requests server) (list (cons headers body))))
-    (define-values (status response) (respond body))
+    (define-values (status response extra-headers)
+      (call-with-values (lambda () (respond body))
+                        (case-lambda
+                          [(status response) (values status response '())]
+                          [(status response extra-headers) (values status response extra-headers)])))
     (define payload (jsexpr->bytes response))
-    (fprintf out "HTTP/1.1 ~a Status\r\nContent-Type: application/json\r\nContent-Length: ~a\r\nConnection: close\r\n\r\n"
-             status (bytes-length payload))
+    (fprintf out "HTTP/1.1 ~a Status\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n" status (bytes-length payload))
+    (for ([header (in-list extra-headers)]) (fprintf out "~a\r\n" header))
+    (fprintf out "Connection: close\r\n\r\n")
     (write-bytes payload out)
     (close-output-port out)
     (close-input-port in)

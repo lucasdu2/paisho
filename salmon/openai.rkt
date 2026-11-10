@@ -13,6 +13,8 @@
 
 (provide openai-adapter
          openai-initial-backoff
+         openai-max-retry-wait
+         openai-sleep
          post-json
          parse-arguments
          ;; Exposed for tests.
@@ -21,10 +23,16 @@
          parse-usage)
 
 ;; Which statuses and how many times to retry, with exponential backoff starting at
-;; `(openai-initial-backoff)` seconds: rate limits and server errors.
+;; `(openai-initial-backoff)` seconds: rate limits and server errors. A response that says
+;; how long to wait (`retry-after-ms` or `retry-after`, as OpenAI sends on rate limits) is
+;; waited for instead when that's longer, up to `(openai-max-retry-wait)` seconds, so a
+;; per-minute limit doesn't use up the attempts. `openai-sleep` does the waiting; tests
+;; replace it.
 (define retryable-statuses '(408 409 429 500 502 503 504))
 (define max-attempts 5)
 (define openai-initial-backoff (make-parameter 1))
+(define openai-max-retry-wait (make-parameter 60))
+(define openai-sleep (make-parameter sleep))
 
 ;; An adapter for `model`. `temperature` defaults to 0, as in AgentDojo; pass #f to leave it
 ;; out, for models that reject it (such as OpenAI's reasoning models). `reasoning-effort` is
@@ -153,25 +161,47 @@
           (string-append "Authorization: Bearer " api-key)))
   (define data (jsexpr->bytes body))
   (let loop ([attempt 1])
-    (define (retry why)
+    (define (retry why [requested #f])
       (if (< attempt max-attempts)
-          (begin
-            (sleep (* (openai-initial-backoff) (expt 2 (sub1 attempt))))
+          (let ([backoff (* (openai-initial-backoff) (expt 2 (sub1 attempt)))])
+            ((openai-sleep) (if requested
+                                (min (max backoff requested) (openai-max-retry-wait))
+                                backoff))
             (loop (add1 attempt)))
           (error 'openai "giving up after ~a attempts: ~a" attempt why)))
     (define result
       (with-handlers ([exn:fail:network? (lambda (e) e)])
-        (define-values (status-line _headers in)
+        (define-values (status-line response-headers in)
           (http-sendrecv host uri #:ssl? ssl? #:port port #:method "POST" #:headers headers #:data data))
         (define status (string->number (cadr (string-split (bytes->string/utf-8 status-line)))))
         (define text (bytes->string/utf-8 (read-all-bytes in) #\?))
         (close-input-port in)
-        (cons status text)))
+        (list status text response-headers)))
     (cond
       [(exn? result) (retry (exn-message result))]
-      [(= (car result) 200) (string->jsexpr (cdr result))]
-      [(memv (car result) retryable-statuses) (retry (format "HTTP ~a: ~a" (car result) (cdr result)))]
-      [else (error 'openai "HTTP ~a: ~a" (car result) (cdr result))])))
+      [else
+       (define-values (status text response-headers) (apply values result))
+       (cond
+         [(= status 200) (string->jsexpr text)]
+         [(memv status retryable-statuses)
+          (retry (format "HTTP ~a: ~a" status text) (requested-wait response-headers))]
+         [else (error 'openai "HTTP ~a: ~a" status text)])])))
+
+;; The seconds `headers` (a response's, as bytes) ask the client to wait before retrying, or
+;; #f: `retry-after-ms`, which OpenAI sends, or else `retry-after` in seconds. A
+;; `retry-after` date is ignored, as are values that aren't non-negative numbers.
+(define (requested-wait headers)
+  (define (header name)
+    (for/or ([line (in-list headers)])
+      (define m (regexp-match #rx#"^([^:]*):[ \t]*(.*?)[ \t\r]*$" line))
+      (and m
+           (string-ci=? (bytes->string/utf-8 (cadr m) #\?) name)
+           (let ([n (string->number (bytes->string/utf-8 (caddr m) #\?) 10)])
+             (and (real? n) (>= n 0) n)))))
+  (cond
+    [(header "retry-after-ms") => (lambda (ms) (/ ms 1000.0))]
+    [(header "retry-after") => exact->inexact]
+    [else #f]))
 
 (define (read-all-bytes in)
   (let loop ([chunks '()])
