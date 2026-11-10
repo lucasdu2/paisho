@@ -27,13 +27,16 @@
 (define openai-initial-backoff (make-parameter 1))
 
 ;; An adapter for `model`. `temperature` defaults to 0, as in AgentDojo; pass #f to leave it
-;; out, for models that reject it (such as OpenAI's reasoning models). `system-role` is
+;; out, for models that reject it (such as OpenAI's reasoning models). `reasoning-effort` is
+;; left out by default, leaving the model's; "none" turns reasoning off, which some models
+;; (such as gpt-6-luna) need in order to take tools through this API. `system-role` is
 ;; "system", which every OpenAI-compatible service accepts; OpenAI also accepts "developer",
 ;; which AgentDojo uses.
 (define (openai-adapter model
                         #:api-key api-key
                         #:base-url [base-url "https://api.openai.com/v1"]
                         #:temperature [temperature 0]
+                        #:reasoning-effort [reasoning-effort #f]
                         #:system-role [system-role "system"])
   (define endpoint (string->url (string-append (string-trim base-url "/" #:left? #f) "/chat/completions")))
   (adapter
@@ -44,18 +47,21 @@
                   api-key
                   (request-body model system messages tools
                                 #:temperature temperature
+                                #:reasoning-effort reasoning-effort
                                 #:system-role system-role)))
      (values (parse-reply response) (parse-usage response)))))
 
 ;; The Chat Completions request for the conversation.
 (define (request-body model system messages tools
                       #:temperature [temperature 0]
+                      #:reasoning-effort [reasoning-effort #f]
                       #:system-role [system-role "system"])
   (define body
     (hasheq 'model model
             'messages (cons (hasheq 'role system-role 'content system)
                             (map message->json messages))))
   (let* ([body (if temperature (hash-set body 'temperature temperature) body)]
+         [body (if reasoning-effort (hash-set body 'reasoning_effort reasoning-effort) body)]
          [body (if (null? tools)
                    body
                    (hash-set* body

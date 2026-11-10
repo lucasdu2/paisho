@@ -46,8 +46,10 @@ skip it.
 
 Use `--base-url https://openrouter.ai/api/v1 --api-key-env OPENROUTER_API_KEY` for
 OpenRouter, and `--no-temperature` for models that reject a temperature. With
-`--api responses`, no temperature is sent unless given, and `--reasoning-effort` sets the
-model's reasoning effort. See `--help` for
+`--api responses`, no temperature is sent unless given. `--reasoning-effort` sets the model's
+reasoning effort with either API; `--reasoning-effort none` turns reasoning off, which
+gpt-6-luna needs in order to take tools through Chat Completions (`--api chat`, the
+default). See `--help` for
 the other options.
 
 Tests use a fake OpenAI server on localhost and a real paisho server built from this

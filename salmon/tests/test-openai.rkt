@@ -45,8 +45,15 @@
 (test-case "temperature and tools are left out when not wanted"
   (define body (request-body "gpt-x" "S." (list (user-message "Hi.")) '() #:temperature #f))
   (check-false (hash-has-key? body 'temperature))
+  (check-false (hash-has-key? body 'reasoning_effort))
   (check-false (hash-has-key? body 'tools))
   (check-false (hash-has-key? body 'tool_choice)))
+
+(test-case "a reasoning effort is sent when given, such as none to turn reasoning off"
+  (define body (request-body "gpt-x" "S." (list (user-message "Hi.")) (list get-webpage)
+                             #:reasoning-effort "none"))
+  (check-equal? (hash-ref body 'reasoning_effort) "none")
+  (check-equal? (length (hash-ref body 'tools)) 1))
 
 (test-case "replies are parsed into text and tool calls"
   (define reply

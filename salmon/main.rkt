@@ -167,7 +167,7 @@
               (set! api a)]
    [("--temperature") t "Sampling temperature (default: 0 with --api chat, none with --api responses)"
                       (set! temperature (string->number t))]
-   [("--reasoning-effort") e "Reasoning effort to request (default: the model's)"
+   [("--reasoning-effort") e "Reasoning effort to request, such as none to turn reasoning off (default: the model's)"
                            (set! reasoning-effort e)]
    [("--no-temperature") "Don't send a temperature (for models that reject one)" (set! temperature #f)]
    [("--benchmark") n "Benchmark name (default: the model)" (set! name n)]
@@ -193,10 +193,9 @@
   (define model-adapter
     (case api
       [("chat")
-       (when reasoning-effort
-         (raise-user-error 'salmon "--reasoning-effort needs --api responses"))
        (openai-adapter model #:api-key api-key #:base-url base-url
-                       #:temperature (if (eq? temperature 'default) 0 temperature))]
+                       #:temperature (if (eq? temperature 'default) 0 temperature)
+                       #:reasoning-effort reasoning-effort)]
       [("responses")
        (responses-adapter model #:api-key api-key #:base-url base-url
                           #:temperature (if (eq? temperature 'default) #f temperature)
