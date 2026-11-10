@@ -74,7 +74,8 @@ enum Request {
         /// Which injection vectors attacks fill: `"seen_only"` (the default), those each
         /// task's reference trace shows the model, as AgentDojo does; or `"all"`, every vector
         /// in the suite's environment. Part of the configuration, so the same for every
-        /// episode.
+        /// episode, and fixed once the benchmark exists: result files are named the same
+        /// either way.
         #[serde(default)]
         inject_vectors: InjectVectors,
     },
@@ -619,7 +620,7 @@ fn start_benchmark(config: &BenchmarkConfig, logdir: &Path) -> Result<Response, 
     let total = episodes.len();
     let pending = episodes
         .into_iter()
-        .filter(|key| !results::is_complete(logdir, &config.name, key, config.inject_vectors))
+        .filter(|key| !results::is_complete(logdir, &config.name, key))
         .collect();
     Ok(Response::BenchmarkStarted {
         name: config.name.clone(),
@@ -1103,7 +1104,8 @@ mod tests {
              them to use the benchmark's"
         );
 
-        // An "all" benchmark: every vector in the environment, by default.
+        // An "all" benchmark: every vector in the environment, by default, saved under the
+        // same name as in a "seen_only" one; the result records which it filled.
         let mut all: Vec<String> = SlackWeb::INJECTION_DEFAULTS
             .iter()
             .map(|(id, _)| id.to_string())
@@ -1113,7 +1115,7 @@ mod tests {
         let started = run(&mut session, "run-w", json!({}));
         assert_eq!(started["type"], "started", "{started}");
         assert_eq!(
-            saved(&session, "run-w", "injection_task_3.all.json"),
+            saved(&session, "run-w", "injection_task_3.json"),
             (json!("all"), all)
         );
 
