@@ -18,13 +18,15 @@ its result sent back.
   that only take tools with reasoning through it, such as gpt-6-luna. Requests are
   stateless, and the model's reasoning is sent back on later turns in encrypted form.
 - `agent.rkt`: the agent loop.
+- `env.rkt`: reads `.env` files.
 - `main.rkt`: runs a benchmark, with episodes in parallel.
 
 ```sh
 # In ../paisho: start the server.
 cargo run --release -- paisho.sock runs
 
-# Here (the API key is read from OPENAI_API_KEY, or the variable --api-key-env names):
+# Here (the API key is read from OPENAI_API_KEY, or the variable --api-key-env names;
+# see below for .env files):
 racket main.rkt --model gpt-4o-2024-08-06 --suite slack \
     --attack important_instructions --attack tool_knowledge --workers 8
 ```
@@ -44,6 +46,11 @@ rerun because the model gave no final answer logs its last attempt as `messages`
 others, oldest first, as `earlier_attempts`; reruns continue in the same environment, so
 what an earlier attempt did counts towards the result. A failed episode logs nothing. Use
 `--conversation-log FILE` to write it elsewhere, or `--no-conversation-log` to skip it.
+
+salmon reads `.env` in the working directory, if there is one, for the variables the shell
+doesn't set, so a variable set in the shell wins. Each line is `NAME=value`, optionally
+preceded by `export`; `#` starts a comment. Use `--env-file FILE` to read another file, or
+`--no-env-file` to read none.
 
 Use `--base-url https://openrouter.ai/api/v1 --api-key-env OPENROUTER_API_KEY` for
 OpenRouter, and `--no-temperature` for models that reject a temperature. With

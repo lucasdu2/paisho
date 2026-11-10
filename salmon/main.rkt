@@ -13,6 +13,7 @@
          racket/list
          racket/string
          "agent.rkt"
+         "env.rkt"
          "llm.rkt"
          (only-in "openai.rkt" openai-adapter)
          "paisho.rkt"
@@ -160,11 +161,16 @@
   (define workers 1)
   (define usage-log 'default)
   (define conversation-log 'default)
+  ;; 'default: .env in the working directory, if there is one.
+  (define env-file 'default)
   (command-line
    #:program "salmon"
    #:once-each
    [("--model") m "Model, as the provider names it (required)" (set! model m)]
    [("--base-url") u "OpenAI-compatible API base URL (default: OpenAI's)" (set! base-url u)]
+   [("--env-file") f "Read environment variables the shell doesn't set from this file (default: .env, if present)"
+                   (set! env-file f)]
+   [("--no-env-file") "Don't read a .env file" (set! env-file #f)]
    [("--api-key-env") v "Environment variable holding the API key (default: OPENAI_API_KEY)"
                       (set! api-key-variable v)]
    [("--api") a "OpenAI API to use: chat (Chat Completions) or responses (default: chat)"
@@ -190,6 +196,13 @@
    [("--task") t "Only run this task (repeatable)" (set! tasks (append tasks (list t)))])
   (unless model (raise-user-error 'salmon "--model is required"))
   (when (null? suites) (raise-user-error 'salmon "at least one --suite is required"))
+  (case env-file
+    [(default) (when (file-exists? ".env") (load-env-file! ".env"))]
+    [(#f) (void)]
+    [else
+     (unless (file-exists? env-file)
+       (raise-user-error 'salmon "the env file ~a doesn't exist" env-file))
+     (load-env-file! env-file)])
   (define api-key
     (or (getenv api-key-variable)
         (raise-user-error 'salmon "the environment variable ~a isn't set" api-key-variable)))
