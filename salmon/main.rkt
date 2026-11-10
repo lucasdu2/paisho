@@ -14,8 +14,9 @@
          racket/string
          "agent.rkt"
          "llm.rkt"
-         "openai.rkt"
-         "paisho.rkt")
+         (only-in "openai.rkt" openai-adapter)
+         "paisho.rkt"
+         (only-in "responses.rkt" responses-adapter))
 
 (provide run-benchmark)
 
@@ -124,7 +125,10 @@
   (define model #f)
   (define base-url "https://api.openai.com/v1")
   (define api-key-variable "OPENAI_API_KEY")
-  (define temperature 0)
+  (define api "chat")
+  ;; 'default: 0 for Chat Completions, as in AgentDojo, and none for the Responses API.
+  (define temperature 'default)
+  (define reasoning-effort #f)
   (define suites '())
   (define attacks '())
   (define tasks '())
@@ -140,7 +144,12 @@
    [("--base-url") u "OpenAI-compatible API base URL (default: OpenAI's)" (set! base-url u)]
    [("--api-key-env") v "Environment variable holding the API key (default: OPENAI_API_KEY)"
                       (set! api-key-variable v)]
-   [("--temperature") t "Sampling temperature (default: 0)" (set! temperature (string->number t))]
+   [("--api") a "OpenAI API to use: chat (Chat Completions) or responses (default: chat)"
+              (set! api a)]
+   [("--temperature") t "Sampling temperature (default: 0 with --api chat, none with --api responses)"
+                      (set! temperature (string->number t))]
+   [("--reasoning-effort") e "Reasoning effort to request (default: the model's)"
+                           (set! reasoning-effort e)]
    [("--no-temperature") "Don't send a temperature (for models that reject one)" (set! temperature #f)]
    [("--benchmark") n "Benchmark name (default: the model)" (set! name n)]
    [("--model-name") n "How attacks address the model (default: paisho's generic name)" (set! model-name n)]
@@ -159,8 +168,20 @@
     (or (getenv api-key-variable)
         (raise-user-error 'salmon "the environment variable ~a isn't set" api-key-variable)))
   (define benchmark (or name (default-benchmark-name model)))
+  (define model-adapter
+    (case api
+      [("chat")
+       (when reasoning-effort
+         (raise-user-error 'salmon "--reasoning-effort needs --api responses"))
+       (openai-adapter model #:api-key api-key #:base-url base-url
+                       #:temperature (if (eq? temperature 'default) 0 temperature))]
+      [("responses")
+       (responses-adapter model #:api-key api-key #:base-url base-url
+                          #:temperature (if (eq? temperature 'default) #f temperature)
+                          #:reasoning-effort reasoning-effort)]
+      [else (raise-user-error 'salmon "--api must be chat or responses, not ~a" api)]))
   (define-values (_finished failed)
-    (run-benchmark (openai-adapter model #:api-key api-key #:base-url base-url #:temperature temperature)
+    (run-benchmark model-adapter
                    #:name benchmark
                    #:usage-log (if (eq? usage-log 'default)
                                    (build-path "usage" (string-append benchmark ".jsonl"))

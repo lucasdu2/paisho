@@ -13,6 +13,8 @@
 
 (provide openai-adapter
          openai-initial-backoff
+         post-json
+         parse-arguments
          ;; Exposed for tests.
          request-body
          parse-reply
@@ -110,11 +112,15 @@
      (define raw (hash-ref function 'arguments ""))
      (tool-call (hash-ref call 'id)
                 (hash-ref function 'name)
-                ;; Malformed arguments are kept as the raw string, so the agent loop can
-                ;; report the problem to the model instead of failing the episode.
-                (with-handlers ([exn:fail? (lambda (_) raw)])
-                  (let ([parsed (if (string=? (string-trim raw) "") (hasheq) (string->jsexpr raw))])
-                    (if (hash? parsed) parsed raw)))))))
+                (parse-arguments raw)))))
+
+;; A tool call's arguments as the model wrote them, parsed. Malformed arguments are kept as
+;; the raw string, so the agent loop can report the problem to the model instead of failing
+;; the episode.
+(define (parse-arguments raw)
+  (with-handlers ([exn:fail? (lambda (_) raw)])
+    (let ([parsed (if (string=? (string-trim raw) "") (hasheq) (string->jsexpr raw))])
+      (if (hash? parsed) parsed raw))))
 
 ;; The one call's usage in a Chat Completions response. Services that leave out `usage` (or
 ;; its cached-token details) count as having used no tokens. Reasoning tokens are part of

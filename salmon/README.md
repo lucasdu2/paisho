@@ -14,6 +14,9 @@ its result sent back.
 - `openai.rkt`: an adapter for OpenAI's Chat Completions API with native tool calling. Its
   base URL is configurable, so it also works with OpenAI-compatible services (OpenRouter,
   vLLM, ...).
+- `responses.rkt`: an adapter for OpenAI's Responses API (`--api responses`), for models
+  that only take tools with reasoning through it, such as gpt-6-luna. Requests are
+  stateless, and the model's reasoning is sent back on later turns in encrypted form.
 - `agent.rkt`: the agent loop.
 - `main.rkt`: runs a benchmark, with episodes in parallel.
 
@@ -34,7 +37,9 @@ same file, and the run's totals are printed at the end. Use `--usage-log FILE` t
 elsewhere, or `--no-usage-log` to skip it.
 
 Use `--base-url https://openrouter.ai/api/v1 --api-key-env OPENROUTER_API_KEY` for
-OpenRouter, and `--no-temperature` for models that reject a temperature. See `--help` for
+OpenRouter, and `--no-temperature` for models that reject a temperature. With
+`--api responses`, no temperature is sent unless given, and `--reasoning-effort` sets the
+model's reasoning effort. See `--help` for
 the other options.
 
 Tests use a fake OpenAI server on localhost and a real paisho server built from this
