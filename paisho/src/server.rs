@@ -58,8 +58,10 @@ enum Request {
     /// Starts (or resumes) a benchmark: a named run whose configuration allows episodes of
     /// `suites`, attacked only by `attacks`. The client decides which episodes to run;
     /// episodes started with `benchmark` set to `name` are checked against the configuration
-    /// and saved when they finish. Starting an existing benchmark again with the same
-    /// configuration resumes it; with a different configuration it's an error.
+    /// and saved when they finish. Starting an existing benchmark again resumes it, adding
+    /// any new suites and attacks to its configuration (as AgentDojo runs a new attack into
+    /// the same directory, reusing the episodes without an attack). Its model name and
+    /// injection vectors can't change.
     StartBenchmark {
         /// Identifies the run, such as the model or pipeline being evaluated. Used as a
         /// directory name, so only letters, digits, `-`, `_` and `.` are allowed.
@@ -143,8 +145,10 @@ enum Response {
         noninjectable: Vec<&'static str>,
     },
     /// The benchmark is registered. `pending` is a suggestion, not a requirement: of the
-    /// `total` episodes the configuration allows (each task benign and under every attack
-    /// and injection, plus each injection alone), those with no saved result yet. The client
+    /// `total` episodes the request's suites and attacks allow (each task benign and under
+    /// every attack and injection, plus each injection alone), those with no saved result
+    /// yet. Suites and attacks added to the benchmark earlier but not requested now are left
+    /// out. The client
     /// decides what to run, and may skip, reorder or repeat episodes (a repeat replaces the
     /// earlier result). The list is computed from the current suites each time, so it can
     /// grow when paisho adds tasks.
@@ -565,8 +569,8 @@ fn handle(request: Request, current: &mut Option<ActiveEpisode>, logdir: &Path) 
     }
 }
 
-/// Registers the benchmark (or checks it against its earlier registration) and lists its
-/// episodes that have no saved result yet.
+/// Registers the benchmark (or adds the request's suites and attacks to its earlier
+/// registration) and lists the request's episodes that have no saved result yet.
 fn start_benchmark(config: &BenchmarkConfig, logdir: &Path) -> Result<Response, String> {
     results::validate_name(&config.name)?;
     if config.suites.is_empty() {
@@ -1373,19 +1377,22 @@ mod tests {
         start_benchmark(&mut session, "run-d", &["important_instructions"]);
 
         let error = |response: Value| response["message"].as_str().unwrap().to_string();
-        let changed = start_benchmark(&mut session, "run-d", &["tool_knowledge"]);
-        assert!(error(changed).contains("already exists with a different configuration"));
         let other_model = session.send(json!({
             "type": "start_benchmark", "name": "run-d", "suites": ["slack"],
             "attacks": ["important_instructions"], "model_name": "GPT-4",
         }));
-        assert!(error(other_model).contains("already exists with a different configuration"));
+        assert_eq!(
+            error(other_model),
+            "benchmark \"run-d\" already exists with model name Some(\"Claude\") and injection \
+             vectors \"seen_only\", not Some(\"GPT-4\") and \"seen_only\"; only suites and \
+             attacks can be added to a benchmark, so choose another name"
+        );
         let other_vectors = session.send(json!({
             "type": "start_benchmark", "name": "run-d", "suites": ["slack"],
             "attacks": ["important_instructions"], "model_name": "Claude",
             "inject_vectors": "all",
         }));
-        assert!(error(other_vectors).contains("injection vectors \"seen_only\""));
+        assert!(error(other_vectors).contains("injection vectors \"seen_only\", not"));
         let bad_name = start_benchmark(&mut session, "../escape", &[]);
         assert!(error(bad_name).contains("invalid benchmark name"));
         let bad_attack = start_benchmark(&mut session, "run-e", &["nope"]);
@@ -1409,6 +1416,99 @@ mod tests {
             "type": "start", "benchmark": "run-z", "suite": "slack", "task": "user_task_0",
         }));
         assert!(error(unknown).contains("unknown benchmark: run-z"));
+    }
+
+    /// Starting a benchmark again with another attack or suite adds it, as AgentDojo does by
+    /// running a new attack into the same directory: the new attack's episodes are pending,
+    /// and those without an attack, which every attack shares, aren't run again.
+    #[test]
+    fn suites_and_attacks_can_be_added() {
+        let mut session = Session::new("added");
+        start_benchmark(&mut session, "run-h", &["important_instructions"]);
+        run_attacked_episode(&mut session, Some("run-h"));
+        let benign = session.send(json!({
+            "type": "start", "benchmark": "run-h", "suite": "slack", "task": "user_task_0",
+        }));
+        assert_eq!(benign["type"], "started", "{benign}");
+        session.send(json!({ "type": "finish" }));
+
+        // Only the new attack: its 21 * 5 attacked episodes, plus the episodes without an
+        // attack, of which user_task_0's benign one is done.
+        let added = start_benchmark(&mut session, "run-h", &["tool_knowledge"]);
+        assert_eq!(added["resumed"], true, "{added}");
+        assert_eq!(added["total"], 21 * 6 + 5);
+        let pending = added["pending"].as_array().unwrap();
+        assert_eq!(pending.len(), 21 * 6 + 5 - 1);
+        assert!(
+            pending
+                .iter()
+                .all(|key| key["attack"] != "important_instructions")
+        );
+
+        // Both attacks are now allowed; the earlier attack's result is still there.
+        let started = session.send(json!({
+            "type": "start", "benchmark": "run-h", "suite": "slack", "task": "user_task_0",
+            "injection": "injection_task_3", "attack": "tool_knowledge",
+        }));
+        assert_eq!(started["type"], "started", "{started}");
+        let both = start_benchmark(
+            &mut session,
+            "run-h",
+            &["important_instructions", "tool_knowledge"],
+        );
+        assert_eq!(both["total"], 21 * 11 + 5);
+        assert_eq!(both["pending"].as_array().unwrap().len(), 21 * 11 + 5 - 2);
+
+        // A suite is added the same way, keeping the attacks added before.
+        let suite = session.send(json!({
+            "type": "start_benchmark", "name": "run-h", "suites": ["banking"],
+            "attacks": [], "model_name": "Claude",
+        }));
+        assert_eq!(suite["resumed"], true, "{suite}");
+        let config = results::load_config(&session.logdir, "run-h").unwrap();
+        assert_eq!(config.suites, ["slack", "banking"]);
+        assert_eq!(config.attacks, ["important_instructions", "tool_knowledge"]);
+    }
+
+    /// Clients adding different attacks to the same benchmark at once all have theirs
+    /// recorded.
+    #[test]
+    fn concurrent_additions_are_all_kept() {
+        let logdir = std::env::temp_dir()
+            .join("paisho-tests")
+            .join(format!("concurrent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&logdir);
+        let config = |suite: &str, attack: &str| BenchmarkConfig {
+            name: "run-i".to_string(),
+            suites: vec![suite.to_string()],
+            attacks: vec![attack.to_string()],
+            model_name: None,
+            inject_vectors: InjectVectors::default(),
+        };
+        let configs = [
+            config("slack", "important_instructions"),
+            config("banking", "tool_knowledge"),
+            config("travel", "important_instructions"),
+            config("workspace", "tool_knowledge"),
+        ];
+        std::thread::scope(|scope| {
+            for config in &configs {
+                let logdir = &logdir;
+                scope.spawn(move || results::register(logdir, config).unwrap());
+            }
+        });
+        let mut registered = results::load_config(&logdir, "run-i").unwrap();
+        registered.suites.sort();
+        registered.attacks.sort();
+        assert_eq!(
+            registered.suites,
+            ["banking", "slack", "travel", "workspace"]
+        );
+        assert_eq!(
+            registered.attacks,
+            ["important_instructions", "tool_knowledge"]
+        );
+        let _ = std::fs::remove_dir_all(&logdir);
     }
 
     #[test]

@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::{self, ErrorKind, Write};
+use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -126,7 +126,8 @@ pub struct EpisodeResult {
 struct ConfigFile {
     #[serde(flatten)]
     config: BenchmarkConfig,
-    /// The build that registered the benchmark. Not checked when resuming.
+    /// The build that registered the benchmark. Not checked when resuming, nor updated when
+    /// suites or attacks are added; each result records the build that ran it.
     #[serde(flatten)]
     build: Build,
 }
@@ -147,53 +148,83 @@ fn config_path(logdir: &Path, name: &str) -> PathBuf {
     logdir.join(name).join("benchmark.json")
 }
 
-/// Records `config` in `logdir`, or checks it against the recorded configuration if the
-/// benchmark already exists. Returns whether the benchmark already existed (so this resumes
-/// it).
+/// Records `config` in `logdir`, or, if the benchmark already exists, adds `config`'s suites
+/// and attacks to it. Returns whether the benchmark already existed (so this resumes it).
+///
+/// Suites and attacks can be added because every attacked episode's result has its own file,
+/// and the episodes without an attack don't depend on which attacks run, so they're shared.
+/// The model name and injection vectors can't change: they change the text attacks inject,
+/// but not where a result is saved, so results run with different ones would be mixed up.
 ///
 /// # Errors
 ///
-/// Fails if the benchmark exists with a different configuration, or on I/O errors.
+/// Fails if the benchmark exists with a different model name or injection vectors, or on
+/// I/O errors.
 pub fn register(logdir: &Path, config: &BenchmarkConfig) -> Result<bool, String> {
     let path = config_path(logdir, &config.name);
-    fs::create_dir_all(path.parent().expect("config path has a parent"))
-        .map_err(|e| format!("could not create {}: {e}", path.display()))?;
+    let dir = path.parent().expect("config path has a parent");
+    fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
 
-    // `create_new` makes registering atomic: of two clients starting the same new benchmark
-    // at once, one creates the file and the other finds it and compares.
-    match fs::OpenOptions::new()
+    // Held until this returns, so of two clients registering the same benchmark at once, the
+    // second sees what the first wrote and neither loses the other's suites or attacks.
+    let lock_path = dir.join(".benchmark.lock");
+    let lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
         .write(true)
-        .create_new(true)
-        .open(&path)
-    {
-        Ok(mut file) => {
-            let contents = ConfigFile {
-                config: config.clone(),
-                build: Build::current(),
-            };
-            let json = serde_json::to_string_pretty(&contents).expect("config serializes");
-            file.write_all(json.as_bytes())
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            Ok(false)
-        }
-        Err(e) if e.kind() == ErrorKind::AlreadyExists => {
-            let existing = load_config(logdir, &config.name)?;
-            if existing != *config {
-                return Err(format!(
-                    "benchmark {:?} already exists with a different configuration \
-                     (suites {:?}, attacks {:?}, model name {:?}, injection vectors \"{}\"); \
-                     choose another name",
-                    config.name,
-                    existing.suites,
-                    existing.attacks,
-                    existing.model_name,
-                    existing.inject_vectors
-                ));
-            }
-            Ok(true)
-        }
-        Err(e) => Err(format!("could not create {}: {e}", path.display())),
+        .open(&lock_path)
+        .map_err(|e| format!("could not open {}: {e}", lock_path.display()))?;
+    lock.lock()
+        .map_err(|e| format!("could not lock {}: {e}", lock_path.display()))?;
+
+    if !path.exists() {
+        let file = ConfigFile {
+            config: config.clone(),
+            build: Build::current(),
+        };
+        write_config(&path, &file)?;
+        return Ok(false);
     }
+
+    let mut file = load_config_file(logdir, &config.name)?;
+    let existing = &file.config;
+    if existing.model_name != config.model_name || existing.inject_vectors != config.inject_vectors
+    {
+        return Err(format!(
+            "benchmark {:?} already exists with model name {:?} and injection vectors \"{}\", \
+             not {:?} and \"{}\"; only suites and attacks can be added to a benchmark, so \
+             choose another name",
+            config.name,
+            existing.model_name,
+            existing.inject_vectors,
+            config.model_name,
+            config.inject_vectors
+        ));
+    }
+    let add = |have: &mut Vec<String>, new: &[String]| {
+        let before = have.len();
+        for item in new {
+            if !have.contains(item) {
+                have.push(item.clone());
+            }
+        }
+        have.len() != before
+    };
+    let added_suites = add(&mut file.config.suites, &config.suites);
+    let added_attacks = add(&mut file.config.attacks, &config.attacks);
+    if added_suites || added_attacks {
+        write_config(&path, &file)?;
+    }
+    Ok(true)
+}
+
+/// Writes `file` to `path` under a temporary name and then renames it, so an episode
+/// starting meanwhile never reads a half-written configuration.
+fn write_config(path: &Path, file: &ConfigFile) -> Result<(), String> {
+    let temp = path.with_extension(format!("json.tmp-{}", std::process::id()));
+    let json = serde_json::to_string_pretty(file).expect("config serializes");
+    fs::write(&temp, json).map_err(|e| format!("could not write {}: {e}", temp.display()))?;
+    fs::rename(&temp, path).map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
 /// The configuration of the benchmark `name`.
@@ -202,15 +233,17 @@ pub fn register(logdir: &Path, config: &BenchmarkConfig) -> Result<bool, String>
 ///
 /// Fails if there is no such benchmark in `logdir` or its configuration can't be read.
 pub fn load_config(logdir: &Path, name: &str) -> Result<BenchmarkConfig, String> {
+    load_config_file(logdir, name).map(|file| file.config)
+}
+
+fn load_config_file(logdir: &Path, name: &str) -> Result<ConfigFile, String> {
     validate_name(name)?;
     let path = config_path(logdir, name);
     let json = fs::read_to_string(&path).map_err(|e| match e.kind() {
         ErrorKind::NotFound => format!("unknown benchmark: {name}; send `start_benchmark` first"),
         _ => format!("could not read {}: {e}", path.display()),
     })?;
-    let file: ConfigFile = serde_json::from_str(&json)
-        .map_err(|e| format!("could not parse {}: {e}", path.display()))?;
-    Ok(file.config)
+    serde_json::from_str(&json).map_err(|e| format!("could not parse {}: {e}", path.display()))
 }
 
 /// The result file of `key` in the benchmark `benchmark`.
