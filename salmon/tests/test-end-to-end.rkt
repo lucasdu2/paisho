@@ -60,10 +60,12 @@
      (define model (openai-adapter "scripted" #:api-key "unused" #:base-url (fake-openai-base-url fake)))
      (define (selected? episode) (member (hash-ref episode 'task) (list "user_task_0" (json-null))))
      (define usage-log (build-path logdir "usage" "salmon-test.jsonl"))
+     (define conversation-log (build-path logdir "usage" "salmon-test.conversations.jsonl"))
      (define-values (finished failed)
        (run-benchmark model
                       #:name "salmon-test"
                       #:usage-log usage-log
+                      #:conversation-log conversation-log
                       #:suites '("slack")
                       #:attacks '("important_instructions")
                       #:socket socket
@@ -103,6 +105,29 @@
                                            'utility #t
                                            'security #t)
                                    three-calls))
+
+     ;; Every finished episode logged its conversation: the user's prompt, then the model's
+     ;; three replies with the tool results between them.
+     (define conversations (map string->jsexpr (file->lines conversation-log)))
+     (check-equal? (length conversations) 11)
+     (define conversation
+       (findf (lambda (l) (and (equal? (hash-ref l 'task) "user_task_0")
+                               (equal? (hash-ref l 'injection) "injection_task_3")))
+              conversations))
+     (check-equal? (hash-ref conversation 'model) "scripted")
+     (check-equal? (hash-ref conversation 'attack) "important_instructions")
+     (check-true (string-prefix? (hash-ref conversation 'system) "You are an AI language model"))
+     (define messages (hash-ref conversation 'messages))
+     (check-equal? (map (lambda (m) (hash-ref m 'role)) messages)
+                   '("user" "assistant" "tool" "tool" "assistant" "tool" "assistant"))
+     (check-equal? (hash-ref (second messages) 'tool_calls)
+                   (list (hasheq 'id "1" 'name "get_webpage" 'arguments (hasheq 'url "www.informations.com"))
+                         (hasheq 'id "2" 'name "no_such_tool" 'arguments (hasheq))))
+     (check-true (string-contains? (hash-ref (third messages) 'text) "<INFORMATION>"))
+     (check-equal? (fourth messages)
+                   (hasheq 'role "tool" 'call_id "2" 'name "no_such_tool"
+                           'text "Invalid tool no_such_tool provided." 'error #t))
+     (check-equal? (last messages) (hasheq 'role "assistant" 'text "Done." 'tool_calls '()))
 
      ;; What the model was sent: paisho's tools, the injected page, and the unknown tool's error.
      (define requests (map cdr (fake-openai-requests fake)))
@@ -168,6 +193,7 @@
               (values 400 (hasheq 'error (hasheq 'message "bad request")))))))
      (define model (openai-adapter "scripted" #:api-key "unused" #:base-url (fake-openai-base-url fake)))
      (define usage-log (build-path logdir "usage.jsonl"))
+     (define conversation-log (build-path logdir "conversations.jsonl"))
      (define-values (finished failed)
        (run-benchmark model
                       #:name "salmon-failed"
@@ -175,6 +201,7 @@
                       #:attacks '()
                       #:socket socket
                       #:usage-log usage-log
+                      #:conversation-log conversation-log
                       #:select? (lambda (episode) (equal? (hash-ref episode 'task) "user_task_0"))
                       #:log void))
      (stop-fake-openai fake)
@@ -184,4 +211,6 @@
      (check-regexp-match #rx"HTTP 400" (hash-ref line 'error))
      (check-equal? (list (hash-ref line 'calls) (hash-ref line 'input_tokens) (hash-ref line 'output_tokens))
                    '(1 100 10))
-     (check-false (hash-has-key? line 'utility)))))
+     (check-false (hash-has-key? line 'utility))
+     ;; A failed episode has no conversation to log.
+     (check-false (file-exists? conversation-log)))))

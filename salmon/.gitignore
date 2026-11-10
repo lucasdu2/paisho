@@ -6,5 +6,5 @@ doc/
 
 .env
 
-# Token usage logs written by main.rkt (one JSON line per episode run).
+# Token usage and conversation logs written by main.rkt (one JSON line per episode run).
 usage/

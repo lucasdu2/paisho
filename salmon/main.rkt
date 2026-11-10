@@ -30,9 +30,15 @@
 ;; calls are paid for too) appends a JSON line to it with the episode, its result or error,
 ;; and the tokens its model calls used. Resumed runs append to the same file, so it covers
 ;; every episode run under `name`.
+;;
+;; With `conversation-log`, a file path, each finished episode appends a JSON line to it with
+;; the episode, the system prompt and its conversation (see `message->jsexpr`). As with
+;; paisho's saved result, an episode whose model gave no final answer and was rerun logs the
+;; last attempt's conversation; a failed episode logs none.
 (define (run-benchmark model
                        #:name name
                        #:usage-log [usage-log #f]
+                       #:conversation-log [conversation-log #f]
                        #:suites suites
                        #:attacks attacks
                        #:model-name [model-name #f]
@@ -63,8 +69,8 @@
   (define finished '())
   (define failed '())
   (define total no-usage)
-  (when usage-log
-    (define dir (let-values ([(dir _name _dir?) (split-path (path->complete-path usage-log))]) dir))
+  (for ([log-file (list usage-log conversation-log)] #:when log-file)
+    (define dir (let-values ([(dir _name _dir?) (split-path (path->complete-path log-file))]) dir))
     (make-directory* dir))
 
   ;; Called with `lock` held.
@@ -77,6 +83,17 @@
                                   episode
                                   outcome
                                   (usage->jsexpr episode-usage)))
+          (newline)))))
+
+  ;; Called with `lock` held.
+  (define (record-conversation! episode conversation)
+    (when conversation-log
+      (with-output-to-file conversation-log #:exists 'append
+        (lambda ()
+          (write-json (hash-union (hasheq 'benchmark name 'model (adapter-name model))
+                                  episode
+                                  (hasheq 'system default-system-prompt
+                                          'messages (map message->jsexpr conversation))))
           (newline)))))
 
   (define (worker)
@@ -95,7 +112,7 @@
                               (set! failed (cons (cons episode (exn-message e)) failed))
                               (record! episode episode-usage (hasheq 'error (exn-message e)))))
                            (log (format "failed ~a: ~a" episode (exn-message e))))])
-          (define-values (result _conversation)
+          (define-values (result conversation)
             (run-episode model conn episode #:benchmark name #:on-usage add-usage!))
           (define outcome (hasheq 'utility (hash-ref result 'utility)
                                   'security (hash-ref result 'security)))
@@ -105,7 +122,8 @@
              (set! finished (cons (hash-set* (hash-union episode outcome)
                                              'usage (usage->jsexpr episode-usage))
                                   finished))
-             (record! episode episode-usage outcome))))
+             (record! episode episode-usage outcome)
+             (record-conversation! episode conversation))))
         (loop)))
     (paisho-close conn))
 
@@ -137,6 +155,7 @@
   (define socket "paisho.sock")
   (define workers 1)
   (define usage-log 'default)
+  (define conversation-log 'default)
   (command-line
    #:program "salmon"
    #:once-each
@@ -158,6 +177,9 @@
    [("--usage-log") f "Append each episode's token usage to this JSONL file (default: usage/<benchmark>.jsonl)"
                     (set! usage-log f)]
    [("--no-usage-log") "Don't write a usage log" (set! usage-log #f)]
+   [("--conversation-log") f "Append each finished episode's conversation to this JSONL file (default: usage/<benchmark>.conversations.jsonl)"
+                           (set! conversation-log f)]
+   [("--no-conversation-log") "Don't write a conversation log" (set! conversation-log #f)]
    #:multi
    [("--suite") s "Suite to run (repeatable; at least one)" (set! suites (append suites (list s)))]
    [("--attack") a "Attack to run (repeatable)" (set! attacks (append attacks (list a)))]
@@ -186,6 +208,9 @@
                    #:usage-log (if (eq? usage-log 'default)
                                    (build-path "usage" (string-append benchmark ".jsonl"))
                                    usage-log)
+                   #:conversation-log (if (eq? conversation-log 'default)
+                                          (build-path "usage" (string-append benchmark ".conversations.jsonl"))
+                                          conversation-log)
                    #:suites suites
                    #:attacks attacks
                    #:model-name model-name

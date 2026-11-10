@@ -3,6 +3,8 @@
 ;; A provider-neutral conversation and the interface every model adapter implements. Adapters
 ;; convert to and from their provider's format in one place; the agent loop only sees these.
 
+(require (only-in json json-null))
+
 (provide (struct-out tool)
          (struct-out tool-call)
          (struct-out user-message)
@@ -12,6 +14,7 @@
          no-usage
          usage+
          usage->jsexpr
+         message->jsexpr
          (struct-out adapter)
          complete)
 
@@ -44,6 +47,27 @@
          (+ (usage-input a) (usage-input b))
          (+ (usage-cached-input a) (usage-cached-input b))
          (+ (usage-output a) (usage-output b))))
+
+
+;; `message` (one of the message structs above) as a jsexpr, for logs. Tool call arguments
+;; are kept as parsed, or as the raw string the model wrote if they weren't valid JSON.
+(define (message->jsexpr message)
+  (cond
+    [(user-message? message)
+     (hasheq 'role "user" 'text (user-message-text message))]
+    [(assistant-message? message)
+     (hasheq 'role "assistant"
+             'text (or (assistant-message-text message) (json-null))
+             'tool_calls (for/list ([call (in-list (assistant-message-tool-calls message))])
+                           (hasheq 'id (tool-call-id call)
+                                   'name (tool-call-name call)
+                                   'arguments (tool-call-arguments call))))]
+    [(tool-message? message)
+     (hasheq 'role "tool"
+             'call_id (tool-message-call-id message)
+             'name (tool-message-name message)
+             'text (tool-message-text message)
+             'error (tool-message-error? message))]))
 
 (define (usage->jsexpr u)
   (hasheq 'calls (usage-calls u)
